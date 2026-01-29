@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spectre Analytics | Secure Gateway</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
+
+        :root {
+            /* Spectre Analytics Palette */
+            --bg-dark: #05080f;        /* Deepest background */
+            --panel-bg: #0f131f;       /* Card background */
+            --input-bg: #1a1f2e;       /* Input fields */
+            --text-main: #f3f4f6;      /* White text */
+            --text-muted: #9ca3af;     /* Gray text */
+            --border-color: #2d3748;
+            
+            /* Dashboard Accents */
+            --neon-purple: #a855f7;
+            --electric-blue: #3b82f6;
+            --gradient-primary: linear-gradient(135deg, #a855f7 0%, #6366f1 100%);
+        }
+
+        * { box-sizing: border-box; font-family: 'Inter', 'Segoe UI', sans-serif; transition: all 0.3s ease; }
+
+        body {
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: var(--text-main);
+            
+            /* --- UPDATED BACKGROUND WITH MATTE MASK LAYER --- */
+            /* The linear-gradient here acts as the dark mask over the image */
+            background: linear-gradient(rgba(5, 8, 15, 0.8), rgba(5, 8, 15, 0.9)), 
+                        url('https://png.pngtree.com/thumb_back/fw800/background/20251004/pngtree-symmetrical-clouds-and-power-lines-form-abstract-face-like-pattern-image_19761333.webp');
+            
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+            /* ------------------------------------------------ */
+        }
+
+        /* Main Card Container - Split Layout */
+        .container {
+            display: flex;
+            width: 900px;
+            height: 600px;
+            background: var(--panel-bg);
+            border-radius: 24px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            overflow: hidden;
+            border: 1px solid rgba(41, 21, 93, 0.74);
+            /* Backdrop filter adds a subtle blur behind the card */
+            backdrop-filter: blur(10px);
+        }
+
+        /* LEFT SIDE - Visual/Branding (UNTOUCHED) */
+        .visual-side {
+            flex: 1;
+            background: linear-gradient(rgba(15, 19, 31, 0.7), rgba(15, 19, 31, 0.8)), 
+                        url('https://images.unsplash.com/photo-1634017839464-5c339ebe3cb4?q=80&w=1000&auto=format&fit=crop'); 
+            background-size: cover;
+            background-position: center;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 40px;
+            position: relative;
+        }
+
+        .visual-side h2 {
+            font-size: 28px;
+            font-weight: 600;
+            margin: 0;
+            letter-spacing: -0.5px;
+            background: linear-gradient(to right, #a862ee, #a862ee);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        /* RIGHT SIDE - Form */
+        .form-side {
+            flex: 1;
+            padding: 50px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            background: var(--panel-bg);
+        }
+
+        h1 { 
+            color: var(--text-main); 
+            margin-bottom: 5px; 
+            font-weight: 600; 
+            font-size: 26px;
+        }
+        
+        p.subtitle {
+            color: var(--text-muted);
+            font-size: 14px;
+            margin-top: 0;
+            margin-bottom: 30px;
+        }
+
+        /* Inputs */
+        .input-group {
+            background: var(--input-bg);
+            margin: 12px 0;
+            border-radius: 12px;
+            display: flex;
+            align-items: center; 
+            padding: 0 15px;
+            border: 1px solid var(--border-color);
+            height: 50px;
+            position: relative;
+        }
+
+        .input-group:focus-within {
+            border-color: var(--neon-purple);
+            box-shadow: 0 0 0 2px rgba(168, 85, 247, 0.2);
+        }
+
+        .input-group i { 
+            width: 20px; 
+            text-align: center; 
+            color: var(--text-muted); 
+            font-size: 16px; 
+        }
+        
+        .input-group:focus-within i {
+            color: var(--neon-purple);
+        }
+
+        input, select {
+            background: transparent;
+            border: 0; outline: 0;
+            padding: 0 15px; width: 100%;
+            height: 100%; 
+            color: var(--text-main); 
+            font-size: 14px;
+        }
+        
+        input::placeholder { color: #555c6e; }
+
+        select { cursor: pointer; color: var(--text-main); }
+        select option { background-color: var(--panel-bg); color: var(--text-main); }
+
+        /* Animated Visibility */
+        #branch-field, #name-field { max-height: 0; overflow: hidden; margin: 0; opacity: 0; border: none; padding: 0; }
+        #branch-field.active, #name-field.active { max-height: 52px; margin: 12px 0; opacity: 1; border: 1px solid var(--border-color); padding: 0 15px; }
+
+        /* Buttons */
+        .btn-field { margin-top: 30px; display: flex; flex-direction: column; gap: 15px; }
+
+        button {
+            width: 100%;
+            padding: 14px;
+            border-radius: 12px; 
+            border: none;
+            cursor: pointer; 
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .primary-btn { 
+            background: var(--gradient-primary); 
+            color: white; 
+            box-shadow: 0 4px 15px rgba(168, 85, 247, 0.3);
+        }
+        
+        .primary-btn:hover {
+            box-shadow: 0 6px 20px rgba(168, 85, 247, 0.5);
+            transform: translateY(-1px);
+        }
+
+        .secondary-btn { 
+            background: transparent; 
+            color: var(--text-muted);
+            border: 1px solid var(--border-color);
+        }
+        
+        .secondary-btn:hover {
+            background: rgba(255,255,255,0.05);
+            color: var(--text-main);
+        }
+
+        /* Company Feedback Section */
+        .company-section {
+            margin-top: auto; 
+            padding-top: 20px;
+            text-align: center;
+        }
+
+        #company-name { font-weight: 600; color: var(--electric-blue); font-size: 14px; letter-spacing: 0.5px; }
+        .status-msg { font-size: 12px; color: var(--text-muted); margin-top: 4px; height: 15px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="visual-side">
+        <h2>Spectre Analytics</h2>
+    </div>
+
+    <div class="form-side">
+        <h1 id="title">Welcome back</h1>
+        <p class="subtitle">Please enter your details to sign in.</p>
+        
+        <form id="authForm" onsubmit="return false;">
+            
+            <div class="input-group" id="name-field">
+                <i class="fa-solid fa-user"></i>
+                <input type="text" id="username" placeholder="Username">
+            </div>
+
+            <div class="input-group">
+                <i class="fa-solid fa-envelope"></i>
+                <input type="email" id="email" placeholder="Corporate Email" required>
+            </div>
+
+            <div class="input-group" id="branch-field">
+                <i class="fa-solid fa-location-dot"></i>
+                <select id="branch-select">
+                    <option value="" disabled selected>Select Branch</option>
+                </select>
+            </div>
+
+            <div class="input-group">
+                <i class="fa-solid fa-lock"></i>
+                <input type="password" id="password" placeholder="Password" required>
+                <i class="fa-solid fa-eye" id="togglePassword" style="position: absolute; right: 15px; cursor: pointer; z-index: 10;"></i>
+            </div>
+
+            <div class="btn-field">
+                <button type="button" id="signin-btn" class="primary-btn">Sign in</button>
+                <button type="button" id="signup-btn" class="secondary-btn">Create an account</button>
+            </div>
+        </form>
+
+        <div class="company-section">
+            <div id="company-name">Secure Gateway</div>
+            <div class="status-msg" id="status-msg">Authentication Required</div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const nameField = document.getElementById('name-field');
+    const branchField = document.getElementById('branch-field');
+    const branchSelect = document.getElementById('branch-select');
+    const signupBtn = document.getElementById('signup-btn');
+    const signinBtn = document.getElementById('signin-btn');
+    const emailInput = document.getElementById('email');
+    const companyName = document.getElementById('company-name');
+    const statusMsg = document.getElementById('status-msg');
+
+    // MODIFIED: New variables for password toggle
+    const passwordInput = document.getElementById('password');
+    const togglePasswordIcon = document.getElementById('togglePassword');
+
+    const branchData = {
+        'nmims.in': ['Mumbai (Main)', 'Shirpur', 'Bengaluru', 'Hyderabad', 'Indore', 'Navi Mumbai', 'Chandigarh'],
+        'google.com': ['Hyderabad', 'Bangalore', 'Gurgaon', 'Pune'],
+        'amazon.com': ['Bangalore', 'Chennai', 'Hyderabad', 'Mumbai'],
+        'apple.com': ['Hyderabad (Maps)', 'Bangalore', 'Mumbai (Retail)'],
+        'meta.com': ['Gurgaon', 'Mumbai', 'Hyderabad'],
+        'netflix.com': ['Mumbai (Headquarters)']
+    };
+
+    const allowedDomains = {
+        'google.com': 'Google LLC',
+        'amazon.com': 'Amazon.com Inc.',
+        'apple.com': 'Apple Inc.',
+        'netflix.com': 'Netflix',
+        'meta.com': 'Meta (Facebook)',
+        'nmims.in': 'NMIMS University'
+    };
+
+    function showFeedback(msg, isError = false) {
+        statusMsg.innerText = msg;
+        statusMsg.style.color = isError ? "#ef4444" : "#10b981";
+    }
+
+    // Toggle Logic
+    signupBtn.onclick = () => toggleForm('signup');
+    signinBtn.onclick = () => toggleForm('signin');
+
+    function toggleForm(mode) {
+        if (mode === 'signup' && !signupBtn.classList.contains('primary-btn')) {
+            nameField.classList.add('active');
+            document.getElementById('title').innerText = "Create account";
+            signupBtn.classList.replace('secondary-btn', 'primary-btn');
+            signupBtn.innerText = "Sign up";
+            signinBtn.classList.replace('primary-btn', 'secondary-btn');
+            signinBtn.innerText = "Already have an account? Log in";
+        } else if (mode === 'signin' && !signinBtn.classList.contains('primary-btn')) {
+            nameField.classList.remove('active');
+            document.getElementById('title').innerText = "Welcome back";
+            signinBtn.classList.replace('secondary-btn', 'primary-btn');
+            signinBtn.innerText = "Sign in";
+            signupBtn.classList.replace('primary-btn', 'secondary-btn');
+            signupBtn.innerText = "Create an account";
+        } else {
+            handleAuth(mode);
+        }
+    }
+
+    // Email Domain Logic
+    emailInput.oninput = function() {
+        let email = emailInput.value.trim();
+        if (email.includes('@')) {
+            let domain = email.split('@')[1].toLowerCase();
+            if (allowedDomains[domain]) {
+                companyName.innerText = allowedDomains[domain];
+                showFeedback("Verified Access");
+                loadBranches(domain);
+            } else {
+                companyName.innerText = "Access Denied";
+                showFeedback("FAANG or NMIMS only", true);
+                branchField.classList.remove('active');
+            }
+        } else {
+            companyName.innerText = "Secure Gateway";
+            showFeedback("Authentication Required");
+            branchField.classList.remove('active');
+        }
+    }
+
+    function loadBranches(domain) {
+        branchSelect.innerHTML = '<option value="" disabled selected>Select Branch</option>';
+        if(branchData[domain]) {
+            branchData[domain].forEach(branch => {
+                let opt = document.createElement('option');
+                opt.value = branch;
+                opt.innerHTML = branch;
+                branchSelect.appendChild(opt);
+            });
+            branchField.classList.add('active');
+        }
+    }
+
+    async function handleAuth(mode) {
+        const email = emailInput.value.trim();
+        const branch = branchSelect.value;
+        const pass = passwordInput.value;
+        const user = document.getElementById('username').value;
+
+        if (mode === 'signup' && !branch) { 
+            showFeedback("Please select a branch", true); 
+            return; 
+        }
+
+        try {
+            const response = await fetch(`http://localhost:3000/${mode}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: user, email, password: pass, branch })
+            });
+
+            let result;
+            try {
+                result = await response.json();
+            } catch (jsonError) {
+                showFeedback("Server error - invalid response", true);
+                return;
+            }
+            
+            if (response.ok) {
+                showFeedback(result.message, false);
+                if (mode === 'signin') {
+                    localStorage.setItem('token', result.token);
+                    window.location.href = 'floor_selection.html'; 
+                } else {
+                    toggleForm('signin');
+                }
+            } else {
+                showFeedback(result.message || "An error occurred", true);
+            }
+        } catch (error) {
+            console.error(error);
+            showFeedback("Backend is offline!", true);
+        }
+    }
+
+    // MODIFIED: Show/Hide Password Logic
+    togglePasswordIcon.addEventListener('click', function () {
+        // Toggle the type attribute
+        const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+        passwordInput.setAttribute('type', type);
+        
+        // Toggle the eye icon class
+        this.classList.toggle('fa-eye');
+        this.classList.toggle('fa-eye-slash');
+    });
+</script>
+
+</body>
+</html>

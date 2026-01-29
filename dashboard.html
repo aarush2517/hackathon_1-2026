@@ -1,0 +1,1272 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spectre Analytics - Enterprise Energy Management</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-zoom/2.0.1/chartjs-plugin-zoom.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+                        mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
+                    },
+                    animation: {
+                        'spin-slow': 'spin 3s linear infinite',
+                        'spin-reverse': 'spin 2s linear infinite reverse',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        .card-hover-effect {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 1px solid transparent;
+        }
+        .dark .card-hover-effect { border-color: #334155; }
+        .card-hover-effect:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 10px 40px -10px rgba(59, 130, 246, 0.15);
+            border-color: rgba(59, 130, 246, 0.3);
+        }
+        .dark .card-hover-effect:hover {
+            box-shadow: 0 10px 40px -10px rgba(59, 130, 246, 0.1);
+            border-color: rgba(59, 130, 246, 0.4);
+        }
+
+        @keyframes marquee { 0% { transform: translateX(100%); } 100% { transform: translateX(-100%); } }
+        .animate-marquee { animation: marquee 20s linear infinite; }
+        .custom-scroll::-webkit-scrollbar { width: 6px; }
+        .custom-scroll::-webkit-scrollbar-track { background: #0f172a; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        input[type=range] { -webkit-appearance: none; background: transparent; }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none; height: 16px; width: 16px; border-radius: 50%;
+            background: #2563eb; cursor: pointer; margin-top: -6px;
+            box-shadow: 0 0 2px rgba(0, 0, 0, 0.5);
+        }
+        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; cursor: pointer; background: #cbd5e1; border-radius: 2px; }
+        .dark input[type=range]::-webkit-slider-runnable-track { background: #334155; }
+        .buffer-scan-line { background: linear-gradient(to bottom, transparent, rgba(59, 130, 246, 0.5), transparent); animation: scan 2s linear infinite; }
+        @keyframes scan { 0% { transform: translateY(-100%); } 100% { transform: translateY(100%); } }
+        #toast-container { display: flex; flex-direction: column-reverse; bottom: 20px; right: 20px; gap: 10px; pointer-events: none; }
+        .toast-slide { animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1); pointer-events: auto; backdrop-filter: blur(8px); }
+        @keyframes slideIn { from { opacity: 0; transform: translateY(20px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
+        
+        /* Map Styles */
+        .leaflet-container { font-family: 'Inter', sans-serif !important; z-index: 1 !important; background: #1e293b !important; }
+        
+        /* Solar Map Specific Styles */
+        #solar-container .container {
+            display: flex; flex-wrap: wrap; gap: 24px; width: 100%; max-width: 950px;
+            background: white; padding: 24px; border-radius: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            align-items: stretch;
+        }
+        .dark #solar-container .container {
+            background: #1e293b; /* slate-800 */
+            border: 1px solid #334155;
+        }
+        #solar-container .controls { flex: 1; min-width: 280px; display: flex; flex-direction: column; justify-content: center; }
+        #solar-container #map { 
+            flex: 1.5; min-width: 300px; height: 450px; 
+            border-radius: 16px; border: 1px solid #e2e8f0; z-index: 0; overflow: hidden;
+        }
+        .dark #solar-container #map { border-color: #334155; /* slate-700 */ }
+
+        #solar-container h2 { color: #0f172a; margin-top: 0; border-bottom: 4px solid #f97316; display: inline-block; padding-bottom: 8px; margin-bottom: 8px;}
+        .dark #solar-container h2 { color: #f8fafc; /* slate-50 */ }
+
+        #solar-container .input-group { margin: 16px 0; }
+        #solar-container label { display: block; font-weight: 600; margin-bottom: 8px; color: #64748b; font-size: 0.875rem; letter-spacing: 0.025em; }
+        .dark #solar-container label { color: #94a3b8; /* slate-400 */ }
+        #solar-container input { width: 100%; padding: 12px 16px; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 14px; box-sizing: border-box; transition: all 0.2s; }
+        #solar-container input:focus { outline: none; border-color: #3b82f6; ring: 2px solid #3b82f6; }
+        .dark #solar-container input { background: #0f172a; border-color: #334155; color: #f8fafc; }
+        .dark #solar-container input:focus { border-color: #60a5fa; }
+
+        #solar-container button {
+            width: 100%; padding: 14px; background: #2563eb; /* blue-600 */ color: white;
+            border: none; border-radius: 10px; font-size: 15px; font-weight: 600;
+            cursor: pointer; transition: 0.2s; margin-top: 12px;
+            box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2);
+        }
+        #solar-container button:hover { background: #1d4ed8; transform: translateY(-1px); }
+        
+        #solar-container #solar-status { margin-top: 20px; padding: 16px; border-radius: 12px; display: none; font-size: 14px; line-height: 1.6; }
+        #solar-container .success { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+        .dark #solar-container .success { background: #064e3b; color: #6ee7b7; border-color: #059669; }
+        #solar-container .error { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+        .dark #solar-container .error { background: #7f1d1d; color: #fca5a5; border-color: #b91c1c; }
+        #solar-container .loading { color: #64748b; font-style: italic; background: #f8fafc; border: 1px solid #e2e8f0; }
+        .dark #solar-container .loading { color: #94a3b8; background: #0f172a; border-color: #334155; }
+
+        #solar-container .big-number { font-size: 32px; font-weight: 800; color: #0f172a; display: block; margin: 12px 0; letter-spacing: -0.025em; }
+        .dark #solar-container .big-number { color: #f8fafc; }
+
+    </style>
+</head>
+
+<body class="bg-slate-50 text-slate-900 font-sans antialiased overflow-x-hidden dark:bg-slate-950 dark:text-slate-100 selection:bg-blue-500 selection:text-white">
+
+    <div id="view-intro" class="min-h-screen flex flex-col items-center justify-center p-6 relative">
+        <div class="absolute top-4 right-4">
+            <button onclick="app.toggleDarkMode()" class="p-2 rounded-full bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-yellow-400 hover:bg-slate-300 dark:hover:bg-slate-700 transition-colors">
+                <i data-lucide="moon" class="dark:hidden"></i><i data-lucide="sun" class="hidden dark:inline"></i>
+            </button>
+        </div>
+        <div class="max-w-5xl w-full grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+            <div class="space-y-8 animate-[fade-in_1s_ease-out]">
+                <div class="flex items-center gap-3">
+                    <div class="bg-blue-600 p-3 rounded-lg text-white shadow-lg shadow-blue-600/20"><i data-lucide="activity" class="w-8 h-8"></i></div>
+                    <div><h1 class="text-4xl font-black tracking-tighter text-slate-900 dark:text-white">SPECTRE</h1><p class="text-sm font-semibold tracking-[0.2em] uppercase text-slate-500 dark:text-slate-400">Analytics Engine v3.5</p></div>
+                </div>
+                <div class="space-y-4">
+                    <h2 class="text-2xl font-bold tracking-tight text-slate-800 dark:text-slate-100">Next-Generation Facility Intelligence</h2>
+                    <p class="text-base leading-relaxed text-slate-600 dark:text-slate-400">Spectre Analytics empowers large-scale enterprises to minimize energy waste through AI-driven anomaly detection, real-time telemetry, and automated environmental balancing.</p>
+                </div>
+                <div class="pt-4">
+                    <button onclick="app.setView('login')" class="group px-8 py-4 bg-slate-900 text-white hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200 font-bold rounded-xl shadow-xl transition-all flex items-center gap-3 w-full md:w-auto justify-center">Initialize System <i data-lucide="arrow-right" class="w-5 h-5 group-hover:translate-x-1 transition-transform"></i></button>
+                </div>
+            </div>
+            <div class="hidden md:flex items-center justify-center p-16 rounded-3xl relative overflow-hidden bg-slate-100 dark:bg-slate-800/30 border border-slate-200 dark:border-slate-800">
+                <div class="absolute top-0 right-0 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+                <div class="absolute bottom-0 left-0 w-64 h-64 bg-purple-500/10 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2"></div>
+                <i data-lucide="activity" class="w-32 h-32 text-slate-300 dark:text-slate-700 animate-pulse"></i>
+            </div>
+        </div>
+    </div>
+
+    <div id="view-login" class="min-h-screen flex items-center justify-center p-6 hidden">
+        <div class="bg-white dark:bg-slate-800/80 backdrop-blur-md p-8 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xl w-full max-w-md card-hover-effect">
+            <div class="flex items-center gap-3 mb-8 border-b border-slate-100 dark:border-slate-700 pb-6">
+                <div class="bg-blue-600 p-2 rounded text-white"><i data-lucide="activity" class="w-5 h-5"></i></div>
+                <div><h1 class="text-lg font-bold tracking-tight">Spectre Analytics</h1><p class="text-xs text-slate-500 dark:text-slate-400 font-medium">System Gateway</p></div>
+            </div>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1 tracking-wide">COMPANY / ENTITY NAME</label>
+                    <div class="relative">
+                        <input id="login-company" type="text" placeholder="e.g., Stark Industries" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg p-2.5 pl-10 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all">
+                        <i data-lucide="building-2" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"></i>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1 tracking-wide">FACILITY LOCATION (TARIFF REGION)</label>
+                    <div class="relative">
+                        <select id="login-region" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg p-2.5 pl-10 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none appearance-none transition-all cursor-pointer"></select>
+                        <i data-lucide="map-pin" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"></i>
+                    </div>
+                </div>
+                <div class="pt-4">
+                    <button onclick="app.handleLogin()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition-all transform hover:scale-[1.02] flex items-center justify-center gap-2 shadow-lg shadow-blue-600/25">Access Dashboard <i data-lucide="arrow-right" class="w-4 h-4"></i></button>
+                </div>
+            </div>
+            <div class="mt-8 text-center pt-4 border-t border-slate-100 dark:border-slate-700"><p class="text-xs text-slate-400 font-medium">v3.5.0 • Enterprise Build</p></div>
+        </div>
+    </div>
+
+    <div id="view-dashboard" class="min-h-screen pb-12 hidden">
+        <nav class="bg-white/80 dark:bg-slate-900/80 border-b border-slate-200 dark:border-slate-800 backdrop-blur-md sticky top-0 z-30">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between h-16 items-center">
+                    <div class="flex items-center gap-3 cursor-pointer group" onclick="app.setView('intro')">
+                        <div class="bg-slate-800 p-1.5 rounded text-white group-hover:bg-blue-600 transition-colors"><i data-lucide="activity" class="w-5 h-5"></i></div>
+                        <span class="text-lg font-bold tracking-tight">Spectre <span class="font-normal text-slate-500 dark:text-slate-400">Analytics</span></span>
+                    </div>
+                    
+                    <div class="flex items-center gap-4">
+                        <button onclick="app.toggleNotifications()" class="relative p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 transition-colors">
+                            <i data-lucide="bell" class="w-5 h-5"></i><span id="notif-badge" class="hidden absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white dark:border-slate-900"></span>
+                        </button>
+
+                        <button onclick="app.toggleDarkMode()" class="p-2 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-yellow-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
+                            <i data-lucide="moon" class="dark:hidden"></i><i data-lucide="sun" class="hidden dark:inline"></i>
+                        </button>
+
+                        <button onclick="app.toggleSettings(true)" class="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">
+                            <i data-lucide="settings" class="w-5 h-5"></i>
+                        </button>
+
+                        <div class="relative ml-2" id="user-menu-container">
+                            <button onclick="app.toggleUserMenu()" class="h-9 w-9 rounded-full bg-gradient-to-tr from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-xs ring-2 ring-white/20 shadow-lg hover:ring-blue-400 transition-all" id="user-avatar">
+                                --
+                            </button>
+
+                            <div id="user-dropdown" class="hidden absolute right-0 mt-3 w-56 bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 py-2 z-50 transform origin-top-right transition-all">
+                                <div class="px-4 py-3 border-b border-slate-100 dark:border-slate-800">
+                                    <p class="text-sm font-bold text-slate-900 dark:text-white truncate" id="dropdown-name">Loading...</p>
+                                    <div class="flex items-center gap-1.5 mt-1">
+                                        <i data-lucide="map-pin" class="w-3 h-3 text-slate-400"></i>
+                                        <p class="text-xs text-slate-500 dark:text-slate-400 truncate" id="dropdown-branch">Unknown Branch</p>
+                                    </div>
+                                </div>
+                                
+                                <a href="#" onclick="app.logout()" class="block px-4 py-2 mt-1 text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2 transition-colors">
+                                    <i data-lucide="log-out" class="w-4 h-4"></i> 
+                                    <span>Sign out</span>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <div id="notification-center" class="fixed inset-y-0 right-0 w-96 bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-700 transform translate-x-full transition-transform duration-300 ease-in-out z-50 shadow-2xl p-6 flex flex-col">
+            <div class="flex items-center justify-between mb-6"><h2 class="text-lg font-bold flex items-center gap-2"><i data-lucide="bell" class="w-5 h-5"></i> Alert Center</h2><button onclick="app.toggleNotifications()" class="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500"><i data-lucide="x" class="w-5 h-5"></i></button></div>
+            <div id="notification-list" class="flex-1 overflow-y-auto space-y-4 custom-scroll">
+                <div class="text-center py-10 opacity-50"><i data-lucide="check-circle" class="w-12 h-12 mx-auto mb-3"></i><p class="text-sm">All systems nominal</p></div>
+            </div>
+        </div>
+
+        <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+                <div>
+                    <h2 class="text-2xl font-bold tracking-tight flex items-center gap-2 text-slate-900 dark:text-white"><i data-lucide="layout-dashboard" class="w-6 h-6 text-slate-400"></i> Telemetry Overview</h2>
+                    <div class="flex items-center gap-2 mt-1">
+                        <span class="relative flex h-2 w-2"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span><span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span></span>
+                        <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Live System Data • <span id="display-company" class="text-slate-700 dark:text-slate-300">Sector 7G</span> • <span id="display-floor" class="text-slate-700 dark:text-slate-300"></span></p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3">
+                    <button onclick="app.exportReport()" class="inline-flex items-center justify-center px-4 py-2 text-sm font-semibold rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-white shadow-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"><i data-lucide="file-text" class="w-4 h-4 mr-2"></i> Export Report</button>
+                    <button id="btn-predict" onclick="app.handleForecast()" class="inline-flex items-center justify-center px-4 py-2 text-sm font-semibold text-white bg-purple-600 rounded-lg hover:bg-purple-700 shadow-lg shadow-purple-500/30 transition-all border border-purple-500/50 hover:scale-105"><i data-lucide="sparkles" class="w-4 h-4 mr-2"></i> Predict Issues</button>
+                    <button id="btn-analyze" onclick="app.handleAnalyze()" class="inline-flex items-center justify-center px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 shadow-lg shadow-blue-500/30 transition-all hover:scale-105"><i data-lucide="search" class="w-4 h-4 mr-2"></i> Run Diagnostic Scan</button>
+                    <div id="status-issue" class="hidden flex items-center gap-2 px-4 py-2 bg-amber-500/10 text-amber-600 rounded-lg border border-amber-500/20"><i data-lucide="alert-triangle" class="w-4 h-4"></i> <span class="text-sm font-bold">Inefficiencies Found</span></div>
+                    <div id="status-optimized" class="hidden flex items-center gap-2 px-4 py-2 bg-emerald-500/10 text-emerald-600 rounded-lg border border-emerald-500/20"><i data-lucide="check-circle" class="w-4 h-4"></i> <span class="text-sm font-bold">System Optimized</span></div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                <div class="bg-white dark:bg-slate-800/50 rounded-xl p-6 shadow-sm relative overflow-hidden card-hover-effect">
+                    <div id="pulse-load" class="absolute top-0 left-0 w-1 h-full bg-amber-500 animate-pulse hidden"></div>
+                    <div class="flex items-center justify-between mb-2"><h3 class="text-xs font-bold tracking-wider text-slate-500 uppercase">Total Load</h3><i data-lucide="zap" id="icon-load" class="w-5 h-5 text-slate-400"></i></div>
+                    <div class="flex items-baseline gap-2"><span id="metric-load" class="text-3xl font-bold tracking-tight font-mono">0</span><span class="text-sm font-medium text-slate-500">kW</span></div>
+                    <div id="metric-load-sub" class="text-xs font-medium mt-4 flex items-center gap-1 text-slate-500"><i data-lucide="activity" class="w-3 h-3"></i> Real-time</div>
+                </div>
+                <div class="bg-white dark:bg-slate-800/50 rounded-xl p-6 shadow-sm card-hover-effect">
+                    <div class="flex items-center justify-between mb-2"><h3 class="text-xs font-bold tracking-wider text-slate-500 uppercase">Waste / Variance</h3><i data-lucide="bar-chart-3" class="w-5 h-5 text-slate-400"></i></div>
+                    <div class="flex items-baseline gap-2"><span id="metric-variance" class="text-3xl font-bold tracking-tight font-mono">0</span><span class="text-sm font-medium text-slate-500">kW</span></div>
+                    <div id="metric-variance-sub" class="text-xs font-medium mt-4 text-slate-500">Diagnostic required</div>
+                </div>
+                <div class="bg-white dark:bg-slate-800/50 rounded-xl p-6 shadow-sm card-hover-effect">
+                    <div class="flex items-center justify-between mb-2"><h3 class="text-xs font-bold tracking-wider text-slate-500 uppercase">Proj. Savings</h3><i id="icon-savings" data-lucide="check-circle" class="w-5 h-5 text-slate-400"></i></div>
+                    <div class="flex items-baseline gap-2"><span class="text-3xl font-bold tracking-tight font-mono">₹<span id="metric-savings">0</span>k</span></div>
+                    <div class="text-xs font-medium mt-4 text-slate-500">Monthly estimate (INR)</div>
+                </div>
+                <div class="bg-white dark:bg-slate-800/50 rounded-xl p-6 shadow-sm card-hover-effect">
+                    <div class="flex items-center justify-between mb-2"><h3 class="text-xs font-bold tracking-wider text-slate-500 uppercase">Atmosphere</h3><i data-lucide="cloud" class="w-5 h-5 text-blue-500"></i></div>
+                    <div id="weather-data"><div class="flex flex-col h-full justify-center"><span class="text-slate-400 text-xs">Loading...</span></div></div>
+                </div>
+            </div>
+
+            <h3 class="text-sm font-bold text-slate-500 uppercase tracking-widest mb-4 ml-1 flex items-center gap-2"><i data-lucide="sun-dim" class="w-4 h-4"></i> Renewable Energy Telemetry</h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <div class="bg-white dark:bg-slate-800/50 rounded-xl p-6 shadow-sm border-l-4 border-l-amber-400 relative overflow-hidden card-hover-effect">
+                    <div class="absolute top-0 right-0 p-4 opacity-10"><i data-lucide="sun" class="w-16 h-16 text-amber-500"></i></div>
+                    <div class="flex items-center justify-between mb-2"><h3 class="text-xs font-bold tracking-wider text-slate-500 uppercase">Solar Generation</h3><i data-lucide="sun-dim" class="w-5 h-5 text-amber-500"></i></div>
+                    <div class="flex items-baseline gap-2"><span id="metric-solar" class="text-3xl font-bold font-mono">0</span><span class="text-sm font-medium text-slate-500">kW</span></div>
+                    <div class="text-xs font-medium text-slate-500 mt-4">Live Output (Based on Cloud Cover)</div>
+                </div>
+                <div class="bg-white dark:bg-slate-800/50 rounded-xl p-6 shadow-sm border-l-4 border-l-red-400 relative overflow-hidden card-hover-effect">
+                    <div class="absolute top-0 right-0 p-4 opacity-10"><i data-lucide="battery-warning" class="w-16 h-16 text-red-500"></i></div>
+                    <div class="flex items-center justify-between mb-2"><h3 class="text-xs font-bold tracking-wider text-slate-500 uppercase">Conversion Loss</h3><i data-lucide="alert-triangle" class="w-5 h-5 text-red-400"></i></div>
+                    <div class="flex items-baseline gap-2"><span id="metric-loss" class="text-3xl font-bold font-mono">0</span><span class="text-sm font-medium text-slate-500">kW</span></div>
+                    <div class="text-xs font-medium text-slate-500 mt-4">82% Loss (Panel Efficiency)</div>
+                </div>
+                <div class="bg-white dark:bg-slate-800/50 rounded-xl p-6 shadow-sm border-l-4 border-l-blue-500 relative overflow-hidden card-hover-effect">
+                    <div class="absolute top-0 right-0 p-4 opacity-10"><i data-lucide="plug-zap" class="w-16 h-16 text-blue-500"></i></div>
+                    <div class="flex items-center justify-between mb-2"><h3 class="text-xs font-bold tracking-wider text-slate-500 uppercase">Net Grid Load</h3><i data-lucide="plug-zap" class="w-5 h-5 text-blue-500"></i></div>
+                    <div class="flex items-baseline gap-2"><span id="metric-net" class="text-3xl font-bold font-mono">0</span><span class="text-sm font-medium text-slate-500">kW</span></div>
+                    <div class="text-xs font-medium text-slate-500 mt-4">Total Load - Solar Input</div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div class="lg:col-span-2 bg-white dark:bg-slate-800/50 rounded-xl shadow-sm flex flex-col border border-transparent dark:border-slate-700">
+                    <div class="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700">
+                        <div class="flex gap-4">
+                            <button id="tab-telemetry" onclick="app.setTab('telemetry')" class="text-xs font-bold uppercase tracking-wide pb-1 border-b-2 border-blue-500">Telemetry Graph</button>
+                            <button id="tab-heatmap" onclick="app.setTab('heatmap')" class="text-xs font-bold uppercase tracking-wide pb-1 border-b-2 border-transparent text-slate-400">Sector Floor Plan</button>
+                            <button id="tab-solar" onclick="app.setTab('solar')" class="text-xs font-bold uppercase tracking-wide pb-1 border-b-2 border-transparent text-slate-400 flex items-center gap-1"><i data-lucide="sun-dim" class="w-3 h-3"></i> Solar Intelligence</button>
+                            <button id="tab-financial" onclick="app.setTab('financial')" class="text-xs font-bold uppercase tracking-wide pb-1 border-b-2 border-transparent text-slate-400">Financial Projection</button>
+                        </div>
+                        <button onclick="app.exportChartImage()" class="text-xs flex items-center gap-1 text-slate-500 hover:text-blue-500 transition-colors"><i data-lucide="camera" class="w-3.5 h-3.5"></i> Save Image</button>
+                    </div>
+                    <div class="h-[340px] w-full p-4 relative">
+                        <div id="buffer-view" class="hidden h-full flex flex-col items-center justify-center bg-slate-950 rounded-lg relative overflow-hidden border border-slate-800 shadow-inner z-10">
+                             <div class="absolute inset-0 opacity-20 pointer-events-none"><div class="w-full h-full buffer-scan-line"></div></div>
+                             <div class="relative w-40 h-40 flex items-center justify-center mb-6">
+                                <div class="absolute inset-0 bg-blue-500/10 rounded-full animate-ping"></div>
+                                <div class="absolute inset-0 border-4 border-t-blue-500 border-r-transparent border-b-blue-500/30 border-l-transparent rounded-full animate-spin-slow"></div>
+                                <div class="absolute inset-3 border-4 border-t-transparent border-r-emerald-500 border-b-transparent border-l-emerald-500/30 rounded-full animate-spin-reverse"></div>
+                                <div class="absolute inset-0 flex flex-col items-center justify-center"><span id="buffer-percent" class="text-3xl font-mono font-bold text-white tracking-tighter">0%</span><span class="text-[10px] text-blue-400 font-mono tracking-widest mt-1">BUFFER</span></div>
+                             </div>
+                             <div class="space-y-1 text-center"><p class="text-sm font-bold text-white tracking-widest">DIAGNOSTIC SCAN IN PROGRESS</p><p class="text-xs font-mono text-blue-400/80">Analysing telemetry streams...</p></div>
+                        </div>
+                        
+                        <div id="chart-container" class="w-full h-full relative"><canvas id="mainChart"></canvas></div>
+                        
+                        <div id="heatmap-container" class="hidden h-full w-full grid grid-cols-2 gap-4"></div>
+                        
+                        <div id="financial-container" class="hidden h-full w-full relative"><canvas id="financialChart"></canvas></div>
+
+                        <div id="solar-container" class="hidden h-full w-full flex flex-col items-center justify-center p-4">
+                            <div class="container dark:bg-slate-800">
+                                <div class="controls">
+                                    <h2 class="dark:text-white">🇮🇳 Solar Estimator</h2>
+                                    <p class="text-slate-600 dark:text-slate-400 text-sm">Click on the map or enter coordinates to check solar potential.</p>
+
+                                    <div class="input-group">
+                                        <label class="dark:text-slate-400">Latitude</label>
+                                        <input type="number" id="lat-input" placeholder="Click on map..." step="any" class="dark:bg-slate-900 dark:border-slate-700 dark:text-white">
+                                    </div>
+                                    <div class="input-group">
+                                        <label class="dark:text-slate-400">Longitude</label>
+                                        <input type="number" id="lon-input" placeholder="Click on map..." step="any" class="dark:bg-slate-900 dark:border-slate-700 dark:text-white">
+                                    </div>
+
+                                    <button onclick="app.calculateSolarPower()">Calculate Power</button>
+                                    <div id="solar-status" class="dark:text-white"></div>
+                                </div>
+
+                                <div id="map"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="lg:col-span-1 space-y-6">
+                    <div class="bg-white dark:bg-slate-800/50 rounded-xl p-6 shadow-sm border border-transparent dark:border-slate-700">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-sm font-bold flex items-center gap-2"><i data-lucide="sliders" class="w-4 h-4"></i> Manual Controls</h3>
+                            <span class="text-[10px] font-mono bg-red-100 text-red-600 px-2 py-0.5 rounded uppercase animate-pulse">Live</span>
+                        </div>
+                        <div class="space-y-6" id="controls-list"></div>
+                    </div>
+                    <div id="diagnostic-card" class="hidden bg-white dark:bg-slate-800/50 rounded-xl p-5 shadow-sm border border-transparent dark:border-slate-700 animate-[fade-in_0.5s]"></div>
+                </div>
+            </div>
+        </main>
+        
+        <div class="fixed bottom-0 left-0 right-0 h-8 overflow-hidden z-40 border-t flex items-center bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400">
+            <div class="whitespace-nowrap animate-marquee flex gap-8 text-xs font-mono" id="ticker-content"></div>
+        </div>
+    </div>
+
+    <div id="modal-auth" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm p-4" onclick="app.handleBackdropClick(event, 'modal-auth')">
+        <div class="bg-white dark:bg-slate-800 w-full max-w-sm rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 p-6">
+            <div class="text-center mb-6"><div class="inline-flex items-center justify-center w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/30 text-red-500 mb-3"><i data-lucide="lock" class="w-6 h-6"></i></div><h3 class="text-lg font-bold">Admin Access Required</h3><p class="text-xs text-slate-500 mt-1">Enter root password to modify system parameters.</p></div>
+            <div class="space-y-4">
+                <input id="admin-pass" type="password" placeholder="Enter Password" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg p-3 text-center tracking-widest focus:border-red-500 outline-none transition-colors" onkeydown="if(event.key === 'Enter') app.verifyAdmin()">
+                <div class="grid grid-cols-2 gap-3"><button onclick="app.toggleModal('modal-auth', false)" class="py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800">Cancel</button><button onclick="app.verifyAdmin()" class="py-2.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-bold shadow-lg shadow-red-500/30">Unlock System</button></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-settings" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4" onclick="app.handleBackdropClick(event, 'modal-settings')">
+        <div class="bg-white dark:bg-slate-800 w-full max-w-md rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700">
+            <div class="p-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center"><h3 class="font-bold flex items-center gap-2"><i data-lucide="settings" class="w-4 h-4"></i> System Configuration</h3><button onclick="app.toggleSettings(false)"><i data-lucide="x" class="w-4 h-4"></i></button></div>
+            <div class="p-6 space-y-6">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 mb-2 tracking-wide">FACILITY REGION</label>
+                        <div id="settings-region-display" class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-3 text-sm text-slate-600 dark:text-slate-300 font-mono flex items-center gap-2 cursor-not-allowed">
+                            <i data-lucide="lock" class="w-3 h-3 opacity-50"></i>
+                            <span id="settings-region-text">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="pt-4 border-t border-slate-100 dark:border-slate-700">
+                    <h4 class="text-xs font-bold text-slate-500 uppercase tracking-wide mb-3">Keyboard Shortcuts</h4>
+                    <div class="grid grid-cols-2 gap-2 text-xs">
+                        <div class="flex justify-between items-center bg-slate-500/50 p-2 rounded"><span class="text-slate-600 dark:text-slate-300">Dark Mode</span><kbd class="font-mono bg-white dark:bg-slate-600 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-500 text-[10px]">Ctrl+D</kbd></div>
+                        <div class="flex justify-between items-center bg-slate-500/50 p-2 rounded"><span class="text-slate-600 dark:text-slate-300">Run Scan</span><kbd class="font-mono bg-white dark:bg-slate-600 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-500 text-[10px]">Ctrl+/</kbd></div>
+                    </div>
+                </div>
+            </div>
+            <div class="p-4 border-t border-slate-100 dark:border-slate-700 flex justify-end"><button onclick="app.saveSettings()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs rounded-lg shadow-sm">Save Configuration</button></div>
+        </div>
+    </div>
+    
+    <div id="modal-fix" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4" onclick="app.handleBackdropClick(event, 'modal-fix')"><div class="bg-white dark:bg-slate-800 w-full max-w-lg rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700"><div class="p-6 border-b border-slate-100 dark:border-slate-700 flex items-center gap-4"><div class="p-3 bg-blue-500/10 rounded-full"><i data-lucide="activity" class="w-6 h-6 text-blue-500"></i></div><div><h3 class="text-lg font-bold">Optimization Recommendation</h3><p class="text-xs text-slate-500">Generated by Spectre Analytics Engine</p></div></div><div class="p-6"></div><div class="p-6 border-t border-slate-100 dark:border-slate-700 flex justify-end gap-3"><button onclick="app.toggleModal('modal-fix', false)" class="px-4 py-2 text-slate-500 hover:text-slate-900 font-medium text-sm">Cancel</button><button onclick="app.confirmFix()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm rounded shadow-sm">Apply Optimization</button></div></div></div>
+    
+    <div id="modal-forecast" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4" onclick="app.handleBackdropClick(event, 'modal-forecast')"><div class="bg-white dark:bg-slate-800 w-full max-w-2xl rounded-xl shadow-2xl border border-purple-500/30 overflow-hidden flex flex-col"><div class="p-5 border-b border-slate-100 dark:border-slate-700 bg-gradient-to-r from-purple-50 to-white dark:from-slate-900 dark:to-slate-800 flex justify-between items-center"><div class="flex items-center gap-3"><div class="p-2 bg-purple-600 text-white rounded-lg shadow-lg shadow-purple-600/30"><i data-lucide="sparkles" class="w-5 h-5"></i></div><div><h3 class="font-bold text-lg leading-tight text-slate-900 dark:text-white">Tomorrow's Hazard Forecast</h3><p class="text-xs text-purple-600 dark:text-purple-400 font-medium">Real-time Forecast (WeatherAPI.com)</p></div></div><button onclick="app.toggleModal('modal-forecast', false)" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"><i data-lucide="x" class="w-5 h-5"></i></button></div><div class="p-6 overflow-y-auto custom-scroll max-h-[70vh]"><div id="forecast-primary" class="mb-6 p-4 rounded-xl bg-purple-50 dark:bg-purple-900/20 border border-purple-100 dark:border-purple-800/50 flex items-start gap-4"></div><h4 class="text-xs font-bold text-slate-500 uppercase mb-3 tracking-wider flex items-center gap-2"><i data-lucide="clock" class="w-3 h-3"></i> Hourly Risk Profile</h4><div class="flex items-end justify-between h-24 gap-1 mb-6" id="forecast-timeline"></div><div class="grid grid-cols-2 gap-4"><div class="p-4 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50"><div class="text-xs text-slate-500 uppercase font-bold mb-1">Predicted Peak Temp</div><div class="text-2xl font-bold text-slate-800 dark:text-white" id="forecast-peak">0 °C</div><div class="text-xs text-red-500 mt-1 font-medium flex items-center gap-1"><i data-lucide="arrow-up-right" class="w-3 h-3"></i> vs Today</div></div><div class="p-4 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50"><div class="text-xs text-slate-500 uppercase font-bold mb-1">Forecast Source</div><div class="text-lg font-bold text-slate-800 dark:text-white" id="forecast-confidence">WeatherAPI.com</div><div class="text-xs text-emerald-500 mt-1 font-medium">Live Data</div></div></div></div><div class="p-4 border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 flex justify-end gap-2"><button onclick="app.toggleModal('modal-forecast', false)" class="px-4 py-2 text-xs font-bold uppercase tracking-wide text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">Dismiss</button><button onclick="app.acknowledgeForecast()" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold uppercase tracking-wide rounded shadow-md shadow-purple-500/20">Acknowledge & Set Alert</button></div></div></div>
+    
+    <div id="modal-zone" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4" onclick="app.handleBackdropClick(event, 'modal-zone')"><div class="bg-white dark:bg-slate-800 w-full max-w-lg rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col max-h-[90vh]"><div class="p-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50"><div class="flex items-center gap-3"><div class="p-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg"><i id="zone-modal-icon" data-lucide="activity" class="w-5 h-5"></i></div><div><h3 id="zone-modal-title" class="font-bold text-lg leading-tight">Zone Details</h3><p class="text-xs text-slate-500 dark:text-slate-400">Energy Breakdown</p></div></div><button onclick="app.toggleModal('modal-zone', false)" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"><i data-lucide="x" class="w-5 h-5"></i></button></div><div class="p-6 overflow-y-auto custom-scroll"><div class="h-64 relative w-full mb-6"><canvas id="zoneChart"></canvas></div><h4 class="text-xs font-bold text-slate-500 uppercase mb-3 tracking-wider">Component Analysis</h4><div id="zone-breakdown-list" class="space-y-3"></div></div><div class="p-4 border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 flex justify-between items-center"><span class="text-xs font-mono text-slate-500">ID: <span id="zone-modal-id">---</span></span><button onclick="app.toggleModal('modal-zone', false)" class="px-4 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-xs font-bold rounded transition-colors">Close View</button></div></div></div>
+
+    <div id="toast-container" class="fixed bottom-12 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+    <script>
+        const TARIFF_DB = { "MH_MSEDCL": { state: "Maharashtra", provider: "MSEDCL" }, "MH_MUMBAI_ADANI": { state: "Maharashtra", provider: "Adani Mumbai" }, "KA_BESCOM": { state: "Karnataka", provider: "BESCOM" }, "DL_BSES": { state: "Delhi", provider: "BSES Rajhdani" }, "TN_TANGEDCO": { state: "Tamil Nadu", provider: "TANGEDCO" } };
+        const REGION_COORDS = {
+            "MH_MSEDCL": { lat: 19.0760, lon: 72.8777, name: "Mumbai" }, 
+            "MH_MUMBAI_ADANI": { lat: 19.0760, lon: 72.8777, name: "Mumbai" }, 
+            "KA_BESCOM": { lat: 12.9716, lon: 77.5946, name: "Bangalore" }, 
+            "DL_BSES": { lat: 28.6139, lon: 77.2090, name: "New Delhi" }, 
+            "TN_TANGEDCO": { lat: 13.0827, lon: 80.2707, name: "Chennai" }, 
+            "DEFAULT": { lat: 19.0760, lon: 72.8777, name: "Mumbai" } 
+        };
+        const ZONE_DETAILS = { 'server': { title: 'Server Hall Details', breakdown: { 'Compute Units': 65, 'CRAC Units (Cooling)': 25, 'UPS Loss': 8, 'Lighting': 2 } }, 'hvac': { title: 'HVAC Plant Details', breakdown: { 'Chiller Compressors': 50, 'Cooling Towers': 20, 'Distribution Pumps': 20, 'Control Panels': 10 } }, 'lights': { title: 'Main Lobby Details', breakdown: { 'Overhead LEDs': 40, 'Feature Walls': 30, 'Reception Screens': 20, 'Security Scanners': 10 } }, 'office': { title: 'Office Floor Details', breakdown: { 'Workstations (Plug)': 45, 'HVAC VAV Boxes': 30, 'Overhead Lighting': 15, 'Meeting Rooms': 10 } } };
+
+        // INDIA GEOFENCE POLYGON
+        const indiaPolygon = [
+            [35.5, 76.5], [30.0, 81.0], [28.0, 88.0], [29.5, 96.0], // North & North-East
+            [22.0, 89.0], [20.0, 87.0], [10.0, 80.0], [8.0, 77.5],  // East Coast & South Tip
+            [10.0, 75.5], [20.0, 72.5], [23.0, 68.0], [30.0, 72.0], // West Coast
+            [34.0, 74.0] // Back to top
+        ];
+
+        // FIX: Leaflet Icons for CDN usage
+        delete L.Icon.Default.prototype._getIconUrl;
+        L.Icon.Default.mergeOptions({
+            iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+            iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+            shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+        });
+
+        const app = {
+            state: {
+                view: 'intro',
+                darkMode: true,
+                company: 'Sector 7G',
+                region: 'MH_MSEDCL',
+                chartData: [],
+                simulation: { server: 20, hvac: 30, lights: 15 },
+                optimized: false,
+                chartInstance: null,
+                zoneChartInstance: null,
+                financialChartInstance: null,
+                notifications: [],
+                solarKw: 0,
+                tickCount: 0,
+                intervalId: null,
+                gridFreq: 60.00,
+                gridVoltage: 230.0,
+                lastTotalLoad: 680,
+                pendingForecast: null,
+                adminUnlocked: false,
+                adminPassword: "admin",
+                cloudCover: 0,
+                floor: null,
+                mapInstance: null, // For Leaflet map instance
+                currentMarker: null // For Leaflet map marker
+            },
+
+            init: async function () {
+                this.state.chartData = this.generateInitialBuffer();
+
+                // MOCK AUTH BYPASS FOR DEMO (In production, uncomment existing check)
+                const saved = localStorage.getItem('spectre_state');
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    // Ensure the view is always dashboard if saved state exists
+                    this.state = { ...this.state, ...parsed, view: 'dashboard', intervalId: null, chartInstance: null };
+                } else {
+                    this.state.view = 'dashboard';
+                }
+                
+                if (this.state.darkMode) document.documentElement.classList.add('dark');
+                else document.documentElement.classList.remove('dark');
+
+                // Fill regions in login page only
+                const opts = Object.keys(TARIFF_DB).map(k => `<option value="${k}">${TARIFF_DB[k].state} - ${TARIFF_DB[k].provider}</option>`).join('');
+                const loginRegion = document.getElementById('login-region');
+                if (loginRegion) loginRegion.innerHTML = opts;
+
+                // Auth check and user data fetch
+                const token = localStorage.getItem('token');
+                if (token) {
+                    try {
+                        const res = await fetch('http://localhost:3000/api/data', {
+                            headers: { 'Authorization': `Bearer ${token}` }
+                        });
+                        if (res.status === 401) {
+                            localStorage.removeItem('token');
+                            window.location.href = 'Login Page.html';
+                            return;
+                        }
+                        if (res.ok) {
+                            const data = await res.json();
+                            if (data.name) {
+                                this.state.company = data.name;
+                                
+                                // --- NEW: INITIALS LOGIC ---
+                                // 1. Split name (e.g. "Aarush Panchal" -> ["Aarush", "Panchal"])
+                                const nameParts = data.name.split(' ');
+                                let initials = nameParts[0][0]; // First letter of first name
+                                if (nameParts.length > 1) {
+                                    initials += nameParts[nameParts.length - 1][0]; // First letter of last name
+                                }
+                                
+                                // 2. Update Avatar
+                                const avatarEl = document.getElementById('user-avatar');
+                                if(avatarEl) avatarEl.innerText = initials.toUpperCase();
+
+                                // 3. Update Dropdown Info
+                                document.getElementById('dropdown-name').innerText = data.name; // Uses Name as Email wasn't in API yet
+                                document.getElementById('dropdown-branch').innerText = this.state.region || 'HQ';
+                            }
+                        }
+                    } catch (e) {
+                        console.log("Offline Mode - API unavailable");
+                    }
+                }
+
+                // --- START NEW FLOOR/LOCATION PARSING ---
+                const params = new URLSearchParams(window.location.search);
+                const floor = params.get('floor');
+                const location = params.get('location');
+
+                if (floor && location) {
+                    this.state.floor = floor;
+                    this.state.region = location;
+                    document.getElementById('display-floor').innerText = `Floor ${floor}`;
+                }
+
+                if (params.get('company')) { 
+                    const loginCompany = document.getElementById('login-company');
+                    if (loginCompany) loginCompany.value = params.get('company'); 
+                    this.state.company = params.get('company'); 
+                }
+                
+                this.persist(); // Persist after all state is loaded/set
+
+                // IMPORTANT: Ensure setView and updateUI are called after data generation
+                // Explicitly set view to dashboard here to ensure it's always shown
+                this.setView('dashboard'); 
+                this.renderHeatmap();
+                this.renderControls();
+                this.updateUI(); // Moved here to be called after data is available
+                lucide.createIcons();
+                this.setupShortcuts();
+
+                // Add click listener to close dropdown when clicking outside
+                document.addEventListener('click', (e) => {
+                    const menu = document.getElementById('user-dropdown');
+                    const btn = document.getElementById('user-avatar');
+                    if (menu && !menu.classList.contains('hidden') && !menu.contains(e.target) && !btn.contains(e.target)) {
+                        menu.classList.add('hidden');
+                    }
+                });
+            },
+
+            // NEW: Toggle User Menu Logic
+            toggleUserMenu: function() {
+                const menu = document.getElementById('user-dropdown');
+                menu.classList.toggle('hidden');
+            },
+
+            setupShortcuts: function() {
+                document.addEventListener('keydown', (e) => {
+                    if ((e.ctrlKey || e.metaKey) && e.key === 'd') { e.preventDefault(); this.toggleDarkMode(); }
+                    if (e.key === 'Escape') this.closeAllModals();
+                    if (this.state.view === 'dashboard') {
+                        if ((e.ctrlKey || e.metaKey) && e.key === '/') { e.preventDefault(); this.handleAnalyze(); }
+                        if ((e.ctrlKey || e.metaKey) && e.key === 'e') { e.preventDefault(); this.exportReport(); }
+                        const authOpen = !document.getElementById('modal-auth').classList.contains('hidden');
+                        if (authOpen && e.key === 'Enter') { e.preventDefault(); this.verifyAdmin(); return; }
+                        if (document.activeElement.tagName !== 'INPUT') {
+                            if (e.key === '1') this.setTab('telemetry');
+                            if (e.key === '2') this.setTab('heatmap');
+                            if (e.key === '3') this.setTab('financial');
+                            if (e.key === '4') this.setTab('solar'); // New shortcut for solar tab
+                        }
+                    }
+                    if (this.state.view === 'login' && e.key === 'Enter') { e.preventDefault(); this.handleLogin(); }
+                });
+            },
+
+            animateCounter: function(id, endValue, suffix = '') {
+                const el = document.getElementById(id); if(!el) return;
+                const startValue = parseInt(el.innerText.replace(/[^0-9]/g, '')) || 0;
+                if(startValue === endValue) return;
+                const duration = 1000; const startTime = performance.now();
+                const step = (currentTime) => {
+                    const elapsed = currentTime - startTime; const progress = Math.min(elapsed / duration, 1);
+                    const ease = 1 - Math.pow(1 - progress, 3);
+                    const current = Math.floor(startValue + (endValue - startValue) * ease);
+                    el.innerText = current + suffix;
+                    if (progress < 1) requestAnimationFrame(step); else el.innerText = endValue + suffix;
+                };
+                requestAnimationFrame(step);
+            },
+
+            closeAllModals: function() {
+                this.toggleModal('modal-fix', false); this.toggleModal('modal-settings', false); this.toggleModal('modal-zone', false); this.toggleModal('modal-forecast', false); this.toggleModal('modal-auth', false);
+                const nc = document.getElementById('notification-center'); if (!nc.classList.contains('translate-x-full')) this.toggleNotifications();
+            },
+
+            persist: function() {
+                localStorage.setItem('spectre_state', JSON.stringify({ darkMode: this.state.darkMode, company: this.state.company, region: this.state.region, simulation: this.state.simulation, adminUnlocked: this.state.adminUnlocked, floor: this.state.floor }));
+            },
+
+            handleBackdropClick: function(e, modalId) { if (e.target.id === modalId) this.toggleModal(modalId, false); },
+
+            verifyAdmin: function() {
+                const input = document.getElementById('admin-pass');
+                if (input.value === this.state.adminPassword) { this.state.adminUnlocked = true; input.value = ''; this.toggleModal('modal-auth', false); this.renderControls(); this.persist(); this.showToast("Admin Controls Unlocked", "success"); } 
+                else { this.showToast("Access Denied", "warning"); input.classList.add('animate-pulse', 'border-red-500'); setTimeout(() => input.classList.remove('animate-pulse', 'border-red-500'), 500); }
+            },
+
+            generateInitialBuffer: function () {
+                const data = []; const now = new Date();
+                for (let i = 30; i > 0; i--) data.push(this.simulateTickData(new Date(now.getTime() - i * 60000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), true));
+                return data;
+            },
+
+            simulateTickData: function (timestamp) {
+                const baseWave = Math.sin(this.state.tickCount * 0.1) * 15;
+                const simS = (this.state.simulation.server / 100) * 60; const simH = (this.state.simulation.hvac / 100) * 50; const simL = (this.state.simulation.lights / 100) * 30;
+                const noise = (Math.random() - 0.5) * 8;
+                const baseLoad = this.state.optimized ? 420 : 650;
+                const totalLoad = Math.round(baseLoad + baseWave + simS + simH + simL + noise);
+                const variance = Math.round((Math.random() * 15 + 5) * ((this.state.simulation.hvac > 80 || this.state.simulation.server > 80) ? 1.5 : 1.0));
+                this.state.gridFreq = 60.00 + (Math.random() - 0.5) * 0.15; this.state.gridVoltage = 230.0 + (Math.random() - 0.5) * 4;
+                this.state.lastTotalLoad = totalLoad; this.state.tickCount++;
+                return { time: timestamp, base: totalLoad - variance, variance: variance, total: totalLoad };
+            },
+
+            startSimulationLoop: function () {
+                if (this.state.intervalId) clearInterval(this.state.intervalId);
+                this.state.intervalId = setInterval(() => {
+                    const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                    const newData = this.simulateTickData(now);
+                    this.state.chartData.shift(); this.state.chartData.push(newData);
+                    if (this.state.chartInstance) {
+                        this.state.chartInstance.data.labels = this.state.chartData.map(d => d.time);
+                        this.state.chartInstance.data.datasets[0].data = this.state.chartData.map(d => d.base);
+                        this.state.chartInstance.data.datasets[1].data = this.state.chartData.map(d => d.total);
+                        this.state.chartInstance.update('none');
+                    }
+                    this.updateUI();
+                }, 1500);
+            },
+
+            setView: function (viewId) {
+                this.state.view = viewId;
+                ['view-intro', 'view-login', 'view-dashboard'].forEach(id => document.getElementById(id).classList.add('hidden'));
+                document.getElementById(`view-${viewId}`).classList.remove('hidden');
+                if (viewId === 'dashboard') { this.initChart(); this.fetchData(); this.updateUI(); this.startSimulationLoop(); } 
+                else if (this.state.intervalId) clearInterval(this.state.intervalId);
+                lucide.createIcons();
+            },
+
+            toggleDarkMode: function () {
+                document.documentElement.classList.toggle('dark');
+                this.state.darkMode = !this.state.darkMode;
+                this.persist();
+                if (this.state.chartInstance) this.initChart();
+                if (this.state.financialChartInstance) this.initFinancialChart();
+                // Re-initialize map if it exists to apply dark mode tile filter
+                if (this.state.mapInstance) {
+                    this.state.mapInstance.remove(); // Remove existing map
+                    this.initSolarMap(); // Re-initialize map (will pick up new CSS filter)
+                }
+            },
+
+            handleLogin: function () {
+                const co = document.getElementById('login-company').value;
+                if (!co) return this.showToast("Please enter company name", "warning");
+                this.state.company = co; this.state.region = document.getElementById('login-region').value; this.persist();
+                this.showToast(`Welcome, ${co} Admin`, "success"); this.setView('dashboard');
+            },
+
+            logout: function () {
+                localStorage.removeItem('token');
+                localStorage.removeItem('spectre_state');
+                window.location.href = 'Login Page.html';
+            },
+
+            // OPEN-METEO API FETCH (Solar and Atmosphere Data)
+            fetchData: async function () {
+                const coords = REGION_COORDS[this.state.region] || REGION_COORDS.DEFAULT;
+                const lat = coords.lat;
+                const lon = coords.lon;
+                const cityName = coords.name;
+
+                try {
+                    // Open-Meteo API for current solar radiation and temperature
+                    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=shortwave_radiation,temperature_2m,relative_humidity_2m,wind_speed_10m&timezone=auto`;
+                    const response = await fetch(url);
+                    if (!response.ok) throw new Error(`Open-Meteo API Error: ${response.status}`);
+                    
+                    const data = await response.json();
+
+                    if (!data.current) throw new Error("No current weather data available from Open-Meteo");
+
+                    const irradiance = data.current.shortwave_radiation; // W/m²
+                    const tempC = data.current.temperature_2m; // °C
+                    const humidity = data.current.relative_humidity_2m; // %
+                    const windSpeed = data.current.wind_speed_10m; // m/s
+                    
+                    // Simple cloud cover estimation from irradiance
+                    const maxPossibleIrradiance = 800; 
+                    let cloudCover = 100 - ((irradiance / maxPossibleIrradiance) * 100);
+                    cloudCover = Math.max(0, Math.min(100, Math.round(cloudCover))); // Clamp between 0 and 100
+                    this.state.cloudCover = cloudCover;
+
+                    // 5kW System Solar Calculation
+                    const systemKwRating = 5.0; // kW
+                    const panelEfficiency = 0.85; // 85% efficiency
+                    let solarKw = (irradiance / 1000) * systemKwRating * panelEfficiency;
+
+                    // Heat Penalty: -0.4% per degree above 25°C
+                    if(tempC > 25) {
+                        solarKw = solarKw * (1 - ((tempC - 25) * 0.004));
+                    }
+                    solarKw = Math.max(0, solarKw); // Ensure no negative power
+                    this.state.solarKw = Math.round(solarKw); // Round to nearest integer
+
+                    // Store forecast data (using current data as approximation for simplicity)
+                    this.state.pendingForecast = {
+                        temp: tempC,
+                        rain: cloudCover > 70 ? 1 : 0, // Simple rain prediction based on heavy cloud
+                        wind: windSpeed * 3.6, // Convert m/s to km/h for consistency with previous forecast
+                        condition: cloudCover > 70 ? 'Cloudy' : cloudCover > 40 ? 'Partly Cloudy' : 'Clear'
+                    };
+
+                    // Update UI with real data
+                    document.getElementById('weather-data').innerHTML = `
+                        <div class="flex items-baseline gap-2"><span class="text-3xl font-bold tracking-tight font-mono">${Math.round(tempC)}°</span><span class="text-sm font-medium text-slate-500">C</span></div>
+                        <div class="text-xs text-slate-500 mt-4 flex gap-3 font-medium">
+                            <span class="flex items-center gap-1"><i data-lucide="droplets" class="w-3 h-3 text-blue-400"></i> ${Math.round(humidity)}%</span>
+                            <span class="flex items-center gap-1"><i data-lucide="wind" class="w-3 h-3 text-slate-400"></i> ${windSpeed.toFixed(1)} m/s</span>
+                        </div>
+                        <div class="text-[10px] text-slate-400 mt-1 truncate">${this.state.pendingForecast.condition} in ${cityName}</div>
+                    `;
+                } catch (e) {
+                    console.error("Open-Meteo API Error:", e);
+                    // Fallback to simulated data if API fails
+                    const temp = Math.floor(Math.random() * 10) + 22;
+                    const humidity = Math.floor(Math.random() * 20) + 60;
+                    const windSpeed = (Math.random() * 5 + 2).toFixed(1);
+                    document.getElementById('weather-data').innerHTML = `
+                        <div class="flex items-baseline gap-2"><span class="text-3xl font-bold tracking-tight font-mono">${temp}°</span><span class="text-sm font-medium text-slate-500">C</span></div>
+                        <div class="text-xs text-slate-500 mt-4 flex gap-3 font-medium">
+                            <span class="flex items-center gap-1"><i data-lucide="droplets" class="w-3 h-3 text-blue-400"></i> ${humidity}%</span>
+                            <span class="flex items-center gap-1"><i data-lucide="wind" class="w-3 h-3 text-slate-400"></i> ${windSpeed} m/s</span>
+                        </div>
+                        <div class="text-[10px] text-slate-400 mt-1 truncate">Offline Mode - ${cityName}</div>
+                    `;
+                    // Fallback solar calculation - simplified random for offline mode
+                    const hour = new Date().getHours();
+                    if (hour > 6 && hour < 18) {
+                        this.state.solarKw = Math.round(Math.random() * 200 + 100); // Random 100-300 kW for daylight
+                    } else {
+                        this.state.solarKw = 0;
+                    }
+                }
+                
+                lucide.createIcons();
+            },
+
+            // --- SOLAR MAP LOGIC ---
+            isInsideIndia: function(lat, lon) {
+                // Ray-Casting Algorithm to check if point is in polygon
+                let inside = false;
+                for (let i = 0, j = indiaPolygon.length - 1; i < indiaPolygon.length; j = i++) {
+                    let xi = indiaPolygon[i][0], yi = indiaPolygon[i][1];
+                    let xj = indiaPolygon[j][0], yj = indiaPolygon[j][1];
+                    
+                    let intersect = ((yi > lon) != (yj > lon)) &&
+                        (lat < (xj - xi) * (lon - yi) / (yj - yi) + xi);
+                    if (intersect) inside = !inside;
+                }
+                return inside;
+            },
+
+            initSolarMap: function() {
+                // Destroy existing map if it's already initialized to prevent duplicates
+                if (this.state.mapInstance) {
+                    this.state.mapInstance.remove();
+                    this.state.mapInstance = null; // Clear the instance
+                    this.state.currentMarker = null; // Clear the marker
+                }
+
+                const mapDiv = document.getElementById('map');
+                if (!mapDiv) {
+                    console.error("Map div not found!");
+                    return;
+                }
+
+                this.state.mapInstance = L.map('map').setView([22.5937, 78.9629], 4);
+
+                // --- NEW TILE LOGIC FOR BETTER DARK MODE ---
+                const isDark = document.documentElement.classList.contains('dark');
+                const tileUrl = isDark 
+                    ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png' 
+                    : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+                
+                const attribution = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
+
+                L.tileLayer(tileUrl, {
+                    attribution: attribution,
+                    maxZoom: 19
+                }).addTo(this.state.mapInstance);
+                // --- END NEW LOGIC ---
+
+                const bounds = L.latLngBounds([[5.0, 60.0], [40.0, 100.0]]);
+                this.state.mapInstance.setMaxBounds(bounds);
+                this.state.mapInstance.on('drag', () => {
+                    this.state.mapInstance.panInsideBounds(bounds, { animate: false });
+                });
+
+                this.state.mapInstance.on('click', (e) => {
+                    const lat = e.latlng.lat.toFixed(4);
+                    const lon = e.latlng.lng.toFixed(4);
+
+                    document.getElementById('lat-input').value = lat;
+                    document.getElementById('lon-input').value = lon;
+
+                    if (this.state.currentMarker) {
+                        this.state.currentMarker.setLatLng(e.latlng);
+                    } else {
+                        this.state.currentMarker = L.marker(e.latlng).addTo(this.state.mapInstance);
+                    }
+                    
+                    document.getElementById('solar-status').style.display = 'none'; // Clear status on new click
+                });
+            },
+
+            calculateSolarPower: async function() {
+                const lat = parseFloat(document.getElementById('lat-input').value);
+                const lon = parseFloat(document.getElementById('lon-input').value);
+                const statusBox = document.getElementById('solar-status');
+                
+                statusBox.style.display = 'block';
+                statusBox.classList.remove('success', 'error', 'loading', 'dark:text-emerald-400', 'dark:text-red-400'); // Clear previous styles
+
+                if (isNaN(lat) || isNaN(lon)) {
+                    statusBox.classList.add('error', 'dark:text-red-400');
+                    statusBox.innerText = "Please click the map to select a location or enter coordinates.";
+                    return;
+                }
+
+                if (!this.isInsideIndia(lat, lon)) {
+                    statusBox.classList.add('error', 'dark:text-red-400');
+                    statusBox.innerHTML = `<strong>Outside India</strong><br>Please select a location within Indian borders.`;
+                    return;
+                }
+
+                statusBox.classList.add('loading');
+                statusBox.innerText = "Querying satellite data...";
+
+                try {
+                    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=shortwave_radiation,temperature_2m&timezone=auto`;
+                    const response = await fetch(url);
+                    const data = await response.json();
+
+                    if (!data.current) { throw new Error("No solar data available"); }
+
+                    const irradiance = data.current.shortwave_radiation;
+                    const temp = data.current.temperature_2m;
+                    
+                    const systemSizeKW = 5.0;
+                    const performanceRatio = 0.80;
+                    
+                    let power = (irradiance / 1000) * systemSizeKW * performanceRatio;
+                    
+                    if(temp > 25) {
+                        const loss = (temp - 25) * 0.004;
+                        power = power * (1 - loss);
+                    }
+                    power = Math.max(0, power);
+
+                    statusBox.classList.remove('loading');
+                    statusBox.classList.add('success', 'dark:text-emerald-400');
+                    statusBox.innerHTML = `
+                        <div>Sunlight: <strong>${irradiance} W/m²</strong></div>
+                        <div>Temperature: <strong>${temp}°C</strong></div>
+                        <span class="big-number">⚡ ${power.toFixed(2)} kW</span>
+                        <small>Instantaneous output (5kW System)</small>
+                    `;
+
+                    // Update the main solarKw state for dashboard metrics
+                    this.state.solarKw = Math.round(power);
+                    this.updateUI();
+
+                } catch (error) {
+                    statusBox.classList.remove('loading');
+                    statusBox.classList.add('error', 'dark:text-red-400');
+                    statusBox.innerText = "Network Error. Could not fetch weather data.";
+                    console.error(error);
+                }
+            },
+            // --- END SOLAR MAP LOGIC ---
+
+            handleAnalyze: function () {
+                document.getElementById('chart-container').classList.add('hidden'); document.getElementById('buffer-view').classList.remove('hidden'); document.getElementById('btn-analyze').innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 mr-2 animate-spin"></i> Processing...`;
+                const percentEl = document.getElementById('buffer-percent'); let percent = 0;
+                const bufferInterval = setInterval(() => {
+                    percent += Math.floor(Math.random() * 5) + 2; if(percent > 100) percent = 100; percentEl.innerText = percent + "%";
+                    if(percent >= 100) { clearInterval(bufferInterval); this.completeAnalysis(); }
+                }, 100);
+            },
+            
+            completeAnalysis: function() {
+                 setTimeout(() => {
+                    document.getElementById('buffer-view').classList.add('hidden'); document.getElementById('chart-container').classList.remove('hidden'); document.getElementById('buffer-percent').innerText = "0%";
+                    const issues = this.detectAnomalies();
+                    const btn = document.getElementById('btn-analyze');
+                    if (issues.length > 0) {
+                        document.getElementById('status-issue').classList.remove('hidden'); document.getElementById('status-issue').querySelector('span').textContent = `${issues.length} Inefficiencies Found`;
+                        document.getElementById('diagnostic-card').classList.remove('hidden'); this.updateDiagnosticCard(issues[0]); btn.style.display = 'none';
+                        this.state.notifications = this.state.notifications.filter(n => n.type !== 'issue');
+                        issues.forEach(issue => { this.state.notifications.push({ id: Date.now() + Math.random(), type: 'issue', title: issue.title, loc: issue.location, fix: issue.fix, time: 'Now' }); });
+                        this.renderNotifications(); this.showToast(`${issues.length} Issues Detected`, "warning");
+                        this.state.chartInstance.data.datasets[1].hidden = false; this.state.chartInstance.update();
+                    } else { this.showToast("No Issues Detected", "success"); btn.innerHTML = `<i data-lucide="check-circle" class="w-4 h-4 mr-2"></i> System Healthy`; }
+                    lucide.createIcons();
+                }, 500);
+            },
+
+            handleForecast: function() {
+                const btn = document.getElementById('btn-predict');
+                const originalHtml = btn.innerHTML;
+                btn.innerHTML = `<i data-lucide="loader" class="w-4 h-4 mr-2 animate-spin"></i> Calculating...`;
+                btn.classList.add('opacity-80', 'cursor-not-allowed');
+                lucide.createIcons();
+
+                // Logic based on REAL data from state.pendingForecast (populated by fetchData)
+                setTimeout(() => {
+                    const data = this.state.pendingForecast;
+                    let scenario = { type: 'Clear', risk: 'Low', title: 'Nominal Operations', desc: 'Weather patterns favorable for standard grid operation.', peak: '650', fix: 'Standard maintenance.' };
+
+                    if (data) {
+                        if (data.temp > 35) {
+                            scenario = { type: 'Heatwave', risk: 'High', title: 'Extreme Heat Warning', desc: `Tomorrow's high of ${data.temp}°C will exceed HVAC cooling capacity.`, peak: '840', fix: 'Pre-cool facility starting at 06:00.' };
+                        } else if (data.wind > 25 || data.rain > 0) {
+                            scenario = { type: 'Storm', risk: 'Medium', title: 'Storm / Grid Risk', desc: `High winds (${data.wind}kph) or rain expected. Grid instability likely.`, peak: '720', fix: 'Ensure backup generators are primed.' };
+                        }
+                    }
+
+                    const container = document.getElementById('forecast-primary');
+                    const iconColor = scenario.risk === 'High' ? 'text-red-500' : (scenario.risk === 'Medium' ? 'text-amber-500' : 'text-emerald-500');
+                    const borderColor = scenario.risk === 'High' ? 'border-red-200 dark:border-red-900' : (scenario.risk === 'Medium' ? 'border-amber-200 dark:border-amber-900' : 'border-emerald-200 dark:border-emerald-900');
+                    container.innerHTML = `<div class="p-3 bg-white dark:bg-slate-800 rounded-lg shadow-sm border ${borderColor}"><i data-lucide="${scenario.risk === 'High' ? 'thermometer-sun' : 'zap'}" class="w-8 h-8 ${iconColor}"></i></div><div><h4 class="font-bold text-slate-800 dark:text-white text-lg">${scenario.title}</h4><p class="text-sm text-slate-600 dark:text-slate-300 mt-1 leading-relaxed">${scenario.desc}</p><div class="mt-3 flex items-center gap-2 text-xs font-mono bg-white dark:bg-slate-800 p-2 rounded border border-slate-200 dark:border-slate-700 inline-block text-slate-500"><strong>RECO:</strong> ${scenario.fix}</div></div>`;
+                    document.getElementById('forecast-peak').innerText = scenario.peak + " kW";
+                    
+                    const timeline = document.getElementById('forecast-timeline'); let timelineHtml = '';
+                    for(let i=0; i<24; i++) { let h = 20 + Math.random() * 30; let color = 'bg-blue-300 dark:bg-blue-800'; if(scenario.risk === 'High' && i > 12 && i < 16) { h = 80 + Math.random()*20; color='bg-red-400'; } timelineHtml += `<div class="w-full ${color} rounded-t-sm relative group"><div class="opacity-0 group-hover:opacity-100 absolute bottom-full mb-1 left-1/2 -translate-x-1/2 text-[10px] bg-black text-white px-1 rounded">${i}:00</div></div>`; }
+                    timeline.innerHTML = timelineHtml;
+                    
+                    this.toggleModal('modal-forecast', true);
+                    btn.innerHTML = originalHtml;
+                    btn.classList.remove('opacity-80', 'cursor-not-allowed');
+                    lucide.createIcons();
+                }, 1000);
+            },
+
+            acknowledgeForecast: function() {
+                this.toggleModal('modal-forecast', false); this.state.notifications.unshift({ id: Date.now(), type: 'predict', title: 'Forecast Acknowledged', loc: 'Facility Wide', fix: 'Pending Action', time: 'Now' }); this.renderNotifications(); this.toggleNotifications();
+            },
+
+            detectAnomalies: function () {
+                const issues = []; const { server, hvac, lights } = this.state.simulation;
+                if (server > 80) issues.push({ title: 'Server Hall Overload', location: 'Server Hall', fix: 'Reduce compute load or improve cooling', zone: 'server', severity: 'high' });
+                if (hvac > 75) issues.push({ title: 'HVAC Short-Cycling', location: 'HVAC Plant', fix: 'Adjust PID deadband from 2°F to 4°F', zone: 'hvac', severity: 'high' });
+                if (lights > 70) issues.push({ title: 'Excessive Lighting', location: 'Main Lobby', fix: 'Enable daylight harvesting', zone: 'lights', severity: 'low' });
+                if (server > 60 && hvac > 60) issues.push({ title: 'Cascade Load Warning', location: 'Multiple Zones', fix: 'Stagger workloads', zone: 'multiple', severity: 'high' });
+                return issues;
+            },
+
+            updateDiagnosticCard: function (issue) {
+                const card = document.getElementById('diagnostic-card'); const iconMap = { 'server': 'cpu', 'hvac': 'fan', 'lights': 'lightbulb', 'multiple': 'alert-triangle' };
+                card.innerHTML = `<h4 class="text-xs font-bold text-slate-500 uppercase mb-3">Detected Anomalies</h4><div class="flex items-start gap-3 mb-4"><div class="mt-1 p-1.5 bg-amber-100 dark:bg-amber-900/30 rounded text-amber-600 dark:text-amber-400"><i data-lucide="${iconMap[issue.zone] || 'alert-triangle'}" class="w-3.5 h-3.5"></i></div><div><p class="text-xs font-bold">${issue.title}</p><p class="text-[10px] text-slate-500 dark:text-slate-400 leading-tight mt-1">${issue.fix}</p></div></div><button onclick="app.handleFix()" class="w-full py-2 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200 text-white text-xs font-bold rounded shadow-md transition-transform active:scale-95">Apply Remediation</button>`; lucide.createIcons();
+            },
+
+            handleFix: function () {
+                const issues = this.detectAnomalies(); if (issues.length > 0) this.updateFixModal(issues[0]); this.toggleModal('modal-fix', true);
+            },
+
+            updateFixModal: function (issue) {
+                const modal = document.getElementById('modal-fix');
+                const severityColors = { 'high': 'text-red-400', 'medium': 'text-amber-400', 'low': 'text-yellow-400' };
+                let dailySavings = issue.zone === 'server' ? 180 : issue.zone === 'hvac' ? 124 : 65;
+                modal.querySelector('.p-6').innerHTML = `<div class="bg-slate-950 p-4 rounded-lg border border-slate-800 text-xs ${severityColors[issue.severity] || 'text-green-400'} leading-relaxed mb-6 font-mono"><p class="mb-2 text-white font-bold">ANALYSIS LOG:</p><p class="mb-1">> Location: ${issue.location}</p><p class="mb-1">> Issue Type: ${issue.title}</p><p class="mb-3">> Severity: ${issue.severity.toUpperCase()}</p><div class="h-px bg-slate-800 my-3"></div><p class="font-bold text-white">RECOMMENDED ACTION:</p><p>${issue.fix}</p></div><div class="flex items-center justify-between p-4 bg-emerald-500/10 rounded-lg border border-emerald-500/20 mb-2"><span class="text-sm font-medium text-emerald-600 dark:text-emerald-400">Projected Daily Savings</span><span class="text-lg font-bold text-emerald-600 dark:text-emerald-400">${dailySavings} kWh</span></div>`;
+            },
+
+            confirmFix: function () {
+                this.toggleModal('modal-fix', false); this.showToast("Optimizing...", "info");
+                setTimeout(() => {
+                    this.state.optimized = true; this.showToast("System Optimized", "success");
+                    document.getElementById('status-issue').classList.add('hidden'); document.getElementById('diagnostic-card').classList.add('hidden'); document.getElementById('status-optimized').classList.remove('hidden');
+                    this.state.notifications = this.state.notifications.filter(n => n.type !== 'issue');
+                    if(!this.state.notifications.some(n => n.type === 'predict')) { this.state.notifications.push({ id: Date.now() + 1, type: 'predict', title: 'Grid Rate Spike Forecast', loc: 'Regional Grid', fix: 'Pre-cool facility at 13:00', time: 'Tomorrow 14:00' }); }
+                    this.renderNotifications(); this.toggleNotifications();
+                }, 1000);
+            },
+
+            initChart: function () {
+                const ctx = document.getElementById('mainChart').getContext('2d');
+                if (this.state.chartInstance) this.state.chartInstance.destroy();
+                const isDark = document.documentElement.classList.contains('dark');
+                const colorGrid = isDark ? '#334155' : '#e2e8f0';
+                const colorText = isDark ? '#94a3b8' : '#64748b';
+                this.state.chartInstance = new Chart(ctx, {
+                    type: 'line',
+                    data: { labels: this.state.chartData.map(d => d.time), datasets: [
+                        { label: 'Base Load', data: this.state.chartData.map(d => d.base), borderColor: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)', fill: true, tension: 0.4, pointRadius: 0 },
+                        { label: 'Total', data: this.state.chartData.map(d => d.total), borderColor: '#f59e0b', backgroundColor: 'rgba(245, 158, 11, 0.2)', fill: '-1', tension: 0.4, pointRadius: 0, hidden: true }
+                    ]},
+                    options: { animation: false, responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, scales: { x: { grid: { display: false }, ticks: { color: colorText, maxTicksLimit: 6 } }, y: { grid: { color: colorGrid }, ticks: { color: colorText }, suggestedMin: 350, suggestedMax: 750 } }, plugins: { legend: { display: false }, zoom: { zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' }, pan: { enabled: true, mode: 'x' } } } }
+                });
+            },
+
+            setTab: function (tab) {
+                document.getElementById('chart-container').classList.toggle('hidden', tab !== 'telemetry');
+                document.getElementById('heatmap-container').classList.toggle('hidden', tab !== 'heatmap');
+                document.getElementById('financial-container').classList.toggle('hidden', tab !== 'financial');
+                document.getElementById('solar-container').classList.toggle('hidden', tab !== 'solar'); // Ensure solar tab is correctly toggled
+                document.getElementById('buffer-view').classList.add('hidden');
+
+                const tabs = ['telemetry', 'heatmap', 'solar', 'financial'];
+                tabs.forEach(t => {
+                    const el = document.getElementById(`tab-${t}`);
+                    if (el) {
+                        el.className = `text-xs font-bold uppercase tracking-wide pb-1 transition-all flex items-center gap-1 ${tab === t ? 'border-b-2 border-blue-500 text-slate-900 dark:text-white' : 'border-b-2 border-transparent text-slate-400'}`;
+                    }
+                });
+
+                if (tab === 'financial' && !this.state.financialChartInstance) this.initFinancialChart();
+                if (tab === 'solar') {
+                    // Initialize map if not already, or invalidate size if it exists
+                    if (!this.state.mapInstance) {
+                        // Delay slightly to ensure container is visible for Leaflet size calc
+                        setTimeout(() => this.initSolarMap(), 100);
+                    } else {
+                        setTimeout(() => this.state.mapInstance.invalidateSize(), 100);
+                    }
+                    // Clear previous inputs and status when opening the tab
+                    document.getElementById('lat-input').value = '';
+                    document.getElementById('lon-input').value = '';
+                    document.getElementById('solar-status').style.display = 'none';
+                    if (this.state.currentMarker) {
+                         this.state.mapInstance.removeLayer(this.state.currentMarker);
+                         this.state.currentMarker = null;
+                    }
+                }
+            },
+
+            initFinancialChart: function() {
+                const ctx = document.getElementById('financialChart').getContext('2d');
+                if (this.state.financialChartInstance) this.state.financialChartInstance.destroy();
+                const isDark = document.documentElement.classList.contains('dark');
+                const colorGrid = isDark ? '#334155' : '#e2e8f0';
+                const colorText = isDark ? '#94a3b8' : '#64748b';
+
+                this.state.financialChartInstance = new Chart(ctx, {
+                    type: 'bar',
+                    data: { 
+                        labels: ['Q1 (Jan-Mar)', 'Q2 (Apr-Jun)', 'Q3 (Jul-Sep)'],
+                        datasets: [
+                            { label: 'Standard Cost (Est.)', data: [1250000, 1420000, 1380000], backgroundColor: 'rgba(239, 68, 68, 0.6)', borderColor: 'rgba(239, 68, 68, 1)', borderWidth: 1 },
+                            { label: 'Optimized Cost', data: [1050000, 1150000, 1100000], backgroundColor: 'rgba(16, 185, 129, 0.6)', borderColor: 'rgba(16, 185, 129, 1)', borderWidth: 1 }
+                        ]
+                    },
+                    options: { 
+                        responsive: true, maintainAspectRatio: false,
+                        plugins: { legend: { labels: { color: colorText } }, tooltip: { callbacks: { label: function(context) { let label = context.dataset.label || ''; if (label) { label += ': '; } if (context.parsed.y !== null) { label += new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(context.parsed.y); } return label; } } } },
+                        scales: { y: { beginAtZero: true, grid: { color: colorGrid }, ticks: { color: colorText, callback: function(value) { return '₹' + value/1000 + 'k'; } } }, x: { grid: { display: false }, ticks: { color: colorText } } }
+                    }
+                });
+            },
+
+            renderHeatmap: function () {
+                const container = document.getElementById('heatmap-container');
+                const zones = [ { id: 'server', name: 'Server Hall', icon: 'cpu', status: this.state.simulation.server > 50 ? 'HIGH LOAD' : 'Nominal' }, { id: 'hvac', name: 'HVAC Plant', icon: 'fan', status: this.state.simulation.hvac > 50 ? 'ACTIVE COOLING' : 'Idle' }, { id: 'lights', name: 'Main Lobby', icon: 'lightbulb', status: this.state.simulation.lights > 0 ? `${this.state.simulation.lights}%` : 'Off' }, { id: 'office', name: 'Offices', icon: 'layout-dashboard', status: '42% Occ' } ];
+                container.innerHTML = zones.map(z => {
+                    const active = (z.id === 'server' && this.state.simulation.server > 50) || (z.id === 'hvac' && this.state.simulation.hvac > 50) || (z.id === 'lights' && this.state.simulation.lights > 0);
+                    const bgClass = active ? 'bg-amber-500 text-white' : 'bg-slate-100 dark:bg-slate-700/50 hover:bg-slate-200 dark:hover:bg-slate-700';
+                    return `<button onclick="app.viewZone('${z.id}')" class="text-left w-full h-full rounded-xl p-4 flex flex-col justify-between transition-all ${bgClass} group relative overflow-hidden border border-transparent hover:border-slate-300 dark:hover:border-slate-500"><div class="absolute top-0 right-0 p-2 opacity-0 group-hover:opacity-100 transition-opacity"><i data-lucide="zoom-in" class="w-4 h-4"></i></div><div class="flex justify-between items-start"><i data-lucide="${z.icon}" class="w-6 h-6 ${active ? 'text-white' : 'text-slate-400'}"></i><span class="text-[10px] font-mono uppercase opacity-70">Zone</span></div><div><h4 class="font-bold text-sm">${z.name}</h4><p class="text-[10px] opacity-80">${z.status}</p></div></button>`;
+                }).join('');
+                lucide.createIcons();
+            },
+            
+            viewZone: function (id) {
+                const details = ZONE_DETAILS[id]; if (!details) return;
+                document.getElementById('zone-modal-title').innerText = details.title;
+                document.getElementById('zone-modal-id').innerText = `ZID-${id.toUpperCase()}-${Math.floor(Math.random() * 1000)}`;
+                const breakdownList = document.getElementById('zone-breakdown-list');
+                const total = Object.values(details.breakdown).reduce((a, b) => a + b, 0);
+                breakdownList.innerHTML = Object.entries(details.breakdown).map(([key, val]) => { const pct = Math.round((val / total) * 100); return `<div><div class="flex justify-between text-xs font-semibold mb-1"><span class="text-slate-700 dark:text-slate-300">${key}</span><span class="text-slate-500">${pct}%</span></div><div class="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5"><div class="bg-blue-600 h-1.5 rounded-full" style="width: ${pct}%"></div></div></div>`; }).join('');
+                this.toggleModal('modal-zone', true);
+                setTimeout(() => {
+                    const ctx = document.getElementById('zoneChart').getContext('2d');
+                    if (this.state.zoneChartInstance) this.state.zoneChartInstance.destroy();
+                    const isDark = document.documentElement.classList.contains('dark');
+                    const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444'];
+                    this.state.zoneChartInstance = new Chart(ctx, { type: 'doughnut', data: { labels: Object.keys(details.breakdown), datasets: [{ data: Object.values(details.breakdown), backgroundColor: colors, borderWidth: 0, hoverOffset: 4 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: isDark ? '#94a3b8' : '#475569', font: { size: 10 }, boxWidth: 10 } } } } });
+                }, 100);
+            },
+            
+            renderControls: function () {
+                const list = document.getElementById('controls-list');
+                const controls = [ { id: 'server', label: 'Server Load', maxKw: 60, icon: 'cpu' }, { id: 'hvac', label: 'HVAC Intensity', maxKw: 50, icon: 'fan' }, { id: 'lights', label: 'Lobby Lights', maxKw: 30, icon: 'lightbulb' } ];
+                const controlsHtml = controls.map(c => {
+                    const val = this.state.simulation[c.id];
+                    const currentKw = Math.round((val / 100) * c.maxKw);
+                    return `<div class="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50"><div class="flex items-center justify-between mb-3"><div class="flex items-center gap-2"><i data-lucide="${c.icon}" class="w-4 h-4 text-slate-500"></i><span class="text-xs font-bold text-slate-700 dark:text-slate-300">${c.label}</span></div><span class="text-xs font-mono text-blue-500">+${currentKw}kW</span></div><div class="flex items-center gap-3"><input type="range" min="0" max="100" value="${val}" onchange="app.updateSim('${c.id}', this.value, event)" class="w-full h-1 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer"><span class="text-xs font-bold w-8 text-right text-slate-500">${val}%</span></div></div>`;
+                }).join('');
+
+                if (!this.state.adminUnlocked) {
+                    list.innerHTML = `<div class="relative"><div class="blur-sm select-none pointer-events-none opacity-50 filter grayscale">${controlsHtml}</div><div class="absolute inset-0 z-10 flex flex-col items-center justify-center text-center"><div class="bg-slate-900/90 text-white p-4 rounded-xl shadow-xl border border-slate-700 backdrop-blur-md transform transition-transform hover:scale-105"><i data-lucide="lock" class="w-8 h-8 mx-auto mb-2 text-red-500"></i><h4 class="font-bold text-sm">Controls Locked</h4><button onclick="app.toggleModal('modal-auth', true); setTimeout(() => document.getElementById('admin-pass').focus(), 100)" class="mt-3 px-4 py-1.5 bg-red-600 hover:bg-red-700 text-xs font-bold rounded shadow-lg shadow-red-500/20 transition-colors">Authenticate</button></div></div></div>`;
+                } else {
+                    list.innerHTML = controlsHtml;
+                    list.innerHTML += `<div class="pt-2 flex justify-end"><button onclick="app.state.adminUnlocked = false; app.renderControls(); app.persist(); app.showToast('Controls Locked', 'info')" class="text-[10px] font-bold uppercase tracking-wider text-slate-400 hover:text-red-500 flex items-center gap-1"><i data-lucide="lock" class="w-3 h-3"></i> Lock Panel</button></div>`;
+                }
+                lucide.createIcons();
+            },
+
+            updateSim: function (key, val, evt) {
+                this.state.simulation[key] = parseInt(val); this.persist(); this.renderHeatmap(); this.renderControls();
+            },
+
+            updateUI: function () {
+                // SAFETY CHECK: Prevent crash if data is missing
+                if (!this.state.chartData || this.state.chartData.length === 0) return;
+                
+                const currentLoad = this.state.lastTotalLoad;
+                this.animateCounter('metric-load', currentLoad);
+                document.getElementById('display-company').innerText = this.state.company;
+                // Ensure display-floor is updated
+                if (this.state.floor) {
+                    document.getElementById('display-floor').innerText = `Floor ${this.state.floor}`;
+                }
+
+
+                const variance = Math.round(this.state.chartData[this.state.chartData.length - 1].variance);
+                this.animateCounter('metric-variance', variance);
+                
+                const varianceParent = document.getElementById('metric-variance').parentElement;
+                varianceParent.classList.toggle('text-amber-500', variance > 20);
+
+                this.animateCounter('metric-solar', Math.round(this.state.solarKw));
+                const loss = this.state.solarKw > 0 ? (this.state.solarKw / 0.18) - this.state.solarKw : 0;
+                this.animateCounter('metric-loss', Math.round(loss));
+                this.animateCounter('metric-net', Math.round(Math.max(0, currentLoad - this.state.solarKw)));
+
+                const dailyCost = (currentLoad * 24 * 12) / 1000;
+                this.animateCounter('metric-savings', Math.round(dailyCost));
+                this.renderTicker();
+            },
+
+            renderTicker: function () {
+                const freq = this.state.gridFreq.toFixed(2); const volt = this.state.gridVoltage.toFixed(1);
+                document.getElementById('ticker-content').innerHTML = `<span class="flex items-center gap-2"><span class="text-emerald-500">GRID_FREQ:</span> ${freq} Hz</span><span class="flex items-center gap-2"><span class="text-blue-500">VOLTAGE:</span> ${volt} V</span><span class="flex items-center gap-2"><span class="text-amber-500">PF:</span> 0.98</span><span class="flex items-center gap-2"><span class="text-emerald-500">SOLAR:</span> ${Math.round(this.state.solarKw)} kW</span><span class="flex items-center gap-2 pl-8 border-l border-slate-700"><span class="text-emerald-500">GRID_FREQ:</span> ${freq} Hz</span><span class="flex items-center gap-2"><span class="text-blue-500">VOLTAGE:</span> ${volt} V</span>`;
+            },
+            
+            handleNotificationClick: function(type) {
+                this.toggleNotifications();
+                if(type === 'predict') {
+                    if(this.state.pendingForecast) {} 
+                    this.toggleModal('modal-forecast', true);
+                } else if (type === 'issue') {
+                    this.handleFix(); 
+                }
+            },
+
+            renderNotifications: function () {
+                const list = document.getElementById('notification-list');
+                if (this.state.notifications.length === 0) {
+                    list.innerHTML = `<div class="text-center py-10 opacity-50"><i data-lucide="check-circle" class="w-12 h-12 mx-auto mb-3"></i><p class="text-sm">All systems nominal</p></div>`;
+                } else {
+                    document.getElementById('notif-badge').classList.remove('hidden'); 
+                    list.innerHTML = this.state.notifications.map(n => `
+                        <div onclick="app.handleNotificationClick('${n.type}')" class="cursor-pointer group p-4 rounded-xl border relative overflow-hidden bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 mb-3 hover:border-blue-500 hover:shadow-md transition-all">
+                            <div class="flex justify-between items-start mb-2">
+                                <span class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${n.type === 'predict' ? 'bg-purple-500 text-white' : 'bg-amber-500 text-white'}">${n.type === 'predict' ? 'Forecast' : 'Issue'}</span>
+                                <span class="text-xs font-mono opacity-50">${n.time}</span>
+                            </div>
+                            <h4 class="text-sm font-bold mb-1 group-hover:text-blue-500 transition-colors">${n.title}</h4>
+                            <div class="text-xs mb-3 flex items-center gap-1 opacity-70"><div class="w-1.5 h-1.5 rounded-full bg-slate-400"></div>${n.loc}</div>
+                            <div class="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700 text-xs flex items-start gap-2 ${n.type === 'predict' ? 'text-purple-600 dark:text-purple-400' : 'text-amber-600 dark:text-amber-400'}">
+                                <i data-lucide="wrench" class="w-3.5 h-3.5 mt-0.5"></i><span><strong>Fix:</strong> ${n.fix}</span>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+                lucide.createIcons();
+            },
+
+            toggleNotifications: function() {
+                const el = document.getElementById('notification-center');
+                el.classList.toggle('translate-x-full');
+                // If closing, hide badge
+                if (el.classList.contains('translate-x-full')) { 
+                    document.getElementById('notif-badge').classList.add('hidden'); 
+                } else {
+                    // If opening, ensure badge is hidden by default unless there are notifications
+                    if (this.state.notifications.length > 0) {
+                         document.getElementById('notif-badge').classList.remove('hidden');
+                    } else {
+                         document.getElementById('notif-badge').classList.add('hidden');
+                    }
+                }
+            },
+
+            toggleSettings: function (show) {
+                if (show) { 
+                    // Lookup readable name
+                    const regionKey = this.state.region;
+                    const regionData = TARIFF_DB[regionKey];
+                    const regionName = regionData ? `${regionData.state} - ${regionData.provider}` : regionKey;
+                    
+                    document.getElementById('settings-region-text').innerText = regionName;
+                    this.toggleModal('modal-settings', true); 
+                } else { 
+                    this.toggleModal('modal-settings', false); 
+                }
+            },
+
+            saveSettings: function () {
+                // Region is read-only now, so we just persist other settings if any, or just close
+                this.persist(); 
+                this.toggleModal('modal-settings', false); 
+                this.showToast("Settings saved", "success");
+            },
+
+            toggleModal: function (id, show) {
+                const el = document.getElementById(id); if (!show && id === 'modal-zone' && this.state.zoneChartInstance) { this.state.zoneChartInstance.destroy(); this.state.zoneChartInstance = null; } show ? el.classList.remove('hidden') : el.classList.add('hidden');
+            },
+
+            showToast: function (msg, type) {
+                const container = document.getElementById('toast-container'); const div = document.createElement('div'); const colorClass = type === 'warning' ? 'bg-amber-500 text-white' : type === 'success' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-white'; const icon = type === 'warning' ? 'alert-triangle' : type === 'success' ? 'check-circle' : 'bell';
+                div.className = `pointer-events-auto flex items-center gap-3 p-4 rounded-lg shadow-2xl toast-slide border border-white/10 ${colorClass}`;
+                div.innerHTML = `<i data-lucide="${icon}" class="w-4 h-4"></i> <span class="text-xs font-medium">${msg}</span>`;
+                container.appendChild(div); lucide.createIcons(); setTimeout(() => div.remove(), 3000);
+            },
+
+            exportReport: function () {
+                const date = new Date(); const filename = `${this.state.company.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_${date.toISOString().slice(0, 10)}_report.csv`; const headers = ["Time", "Base", "Variance", "Total"]; const rows = this.state.chartData.map(d => `${d.time},${d.base},${d.variance},${d.total}`).join("\n"); const blob = new Blob([headers.join(",") + "\n" + rows], { type: 'text/csv' }); const url = window.URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = filename; a.click(); this.showToast(`Exported: ${filename}`, "success");
+            },
+
+            exportChartImage: function () {
+                const canvas = document.getElementById('mainChart'); const image = canvas.toDataURL("image/png").replace("image/png", "image/octet-stream"); const filename = `${this.state.company.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_chart.png`; const link = document.createElement('a'); link.download = filename; link.href = image; link.click(); this.showToast("Chart Image Saved", "success");
+            }
+        };
+
+        app.init();
+    </script>
+</body>
+</html>
