@@ -37,10 +37,15 @@ The core analytics engine featuring:
 
 hackathon_1-2026/
 ├── Login Page.html       # Frontend: Auth Entry Point
+
 ├── floor_selection.html  # Frontend: Floor Navigation
+
 ├── dashboard.html        # Frontend: Main Analytics Engine
+
 ├── server.js             # Backend: Express Server & Auth Logic
+
 ├── package.json          # Dependencies
+
 └── README.md             # Documentation
 
 
