@@ -51,6 +51,7 @@ MongoDB installed and running locally on port 27017.
 Steps
 1. Clone the repository
    Bash : git clone https://github.com/aarush2517/hackathon_1-2026.git
+   
    then : cd hackathon_1-2026
    
 3. Install Backend Dependencies
