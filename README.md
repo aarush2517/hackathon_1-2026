@@ -9,7 +9,8 @@ It combines real-time telemetry, AI-driven anomaly detection, and geospatial sol
 ### 1. 🔐 Secure Gateway (`Login Page.html` + `server.js`)
 - **Full-Stack Auth:** User registration and login powered by **Node.js** and **MongoDB**.
 - **JWT Authentication:** Secure session management using JSON Web Tokens.
-- **Domain Logic:** Automatically detects corporate domains (e.g., `@google.com`, `@nmims.in`) to assign branch locations.
+- **Domain Logic:** Automatically detects corporate domains (e.g., `@google.com`, `@amazon.com`, `@apple.com`, `@netflix.com`, `@meta.com`, `@nmims.in`) to assign branch locations.
+- ❌ Blocked: Public domains like `@gmail.com` or `@yahoo.com`.
 
 ### 2. 🏢 Floor Selection Interface (`floor_selection.html`)
 - **Real-Time Load Visualization:** Interactive cards displaying power consumption (kW) per floor.
