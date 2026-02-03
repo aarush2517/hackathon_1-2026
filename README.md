@@ -55,17 +55,18 @@ Steps
    
 3. Install Backend Dependencies
    Bash : npm install
+   
    (Ensure express, mongoose, cors, dotenv, and jsonwebtoken are in your package.json)
 
-4. Start MongoDB Ensure your local MongoDB instance is running:
+5. Start MongoDB Ensure your local MongoDB instance is running:
    Bash : mongod
 
-5. Start the Server
+6. Start the Server
    Bash : node server.js
    Server runs on: http://localhost:3000Database connects to:
    mongodb://127.0.0.1:27017/enterpriseDB
 
-6. Launch the AppOpen Login Page.html in your browser (or use Live Server).
+7. Launch the AppOpen Login Page.html in your browser (or use Live Server).
 
 🧪 How to TestSign 
 1. Up: Open the login page, switch to "Create Account," and register with a supported email domain (e.g., admin@google.com).
