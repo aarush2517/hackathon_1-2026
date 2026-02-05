@@ -76,6 +76,6 @@ Steps
 5. Launch the AppOpen Login Page.html in your browser (or use Live Server).
 
 🧪 How to TestSign 
-1. Up: Open the login page, switch to "Create Account," and register with a supported email domain (e.g., admin@google.com).
+1. Up: Open the login page, switch to "Create Account," and register with a supported email domain (e.g., admin@meta.com).
 2. Login: Use your new credentials to sign in.
 3. Explore: Select a floor to view the real-time analytics dashboard.
