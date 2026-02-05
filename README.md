@@ -36,6 +36,7 @@ The core analytics engine featuring:
 
 
 hackathon_1-2026/
+
 ├── Login Page.html       # Frontend: Auth Entry Point
 
 ├── floor_selection.html  # Frontend: Floor Navigation
